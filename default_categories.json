@@ -1,0 +1,162 @@
+{
+  "version": "1.0.0",
+  "categories": [
+    {
+      "id": "git_commands",
+      "name": "Git",
+      "icon": "git.png",
+      "order": 1,
+      "is_active": true,
+      "items": [
+        {"label": "git status", "content": "git status"},
+        {"label": "git add .", "content": "git add ."},
+        {"label": "git commit -m", "content": "git commit -m \"\""},
+        {"label": "git push origin", "content": "git push origin main"},
+        {"label": "git pull origin", "content": "git pull origin main"},
+        {"label": "git branch", "content": "git branch"},
+        {"label": "git checkout", "content": "git checkout "},
+        {"label": "git merge", "content": "git merge "},
+        {"label": "git log", "content": "git log --oneline"},
+        {"label": "git diff", "content": "git diff"},
+        {"label": "git stash", "content": "git stash"},
+        {"label": "git reset", "content": "git reset --soft HEAD~1"},
+        {"label": "git clone", "content": "git clone "},
+        {"label": "git remote -v", "content": "git remote -v"}
+      ]
+    },
+    {
+      "id": "cmd_commands",
+      "name": "CMD",
+      "icon": "terminal.png",
+      "order": 2,
+      "is_active": true,
+      "items": [
+        {"label": "dir - Listar archivos", "content": "dir"},
+        {"label": "cd - Cambiar directorio", "content": "cd "},
+        {"label": "mkdir - Crear carpeta", "content": "mkdir "},
+        {"label": "del - Eliminar archivo", "content": "del "},
+        {"label": "copy - Copiar archivo", "content": "copy "},
+        {"label": "move - Mover archivo", "content": "move "},
+        {"label": "cls - Limpiar pantalla", "content": "cls"},
+        {"label": "ipconfig - Configuración IP", "content": "ipconfig /all"},
+        {"label": "ping - Probar conexión", "content": "ping "},
+        {"label": "tasklist - Listar procesos", "content": "tasklist"},
+        {"label": "taskkill - Matar proceso", "content": "taskkill /F /PID "},
+        {"label": "netstat - Conexiones red", "content": "netstat -ano"},
+        {"label": "systeminfo - Info sistema", "content": "systeminfo"}
+      ]
+    },
+    {
+      "id": "docker_commands",
+      "name": "Docker",
+      "icon": "docker.png",
+      "order": 3,
+      "is_active": true,
+      "items": [
+        {"label": "docker ps - Contenedores activos", "content": "docker ps"},
+        {"label": "docker ps -a - Todos los contenedores", "content": "docker ps -a"},
+        {"label": "docker images - Listar imágenes", "content": "docker images"},
+        {"label": "docker run", "content": "docker run -d --name  -p 8080:80 "},
+        {"label": "docker start", "content": "docker start "},
+        {"label": "docker stop", "content": "docker stop "},
+        {"label": "docker restart", "content": "docker restart "},
+        {"label": "docker exec -it", "content": "docker exec -it  /bin/bash"},
+        {"label": "docker logs", "content": "docker logs -f "},
+        {"label": "docker rm - Eliminar contenedor", "content": "docker rm -f "},
+        {"label": "docker rmi - Eliminar imagen", "content": "docker rmi "},
+        {"label": "docker-compose up", "content": "docker-compose up -d"},
+        {"label": "docker-compose down", "content": "docker-compose down"},
+        {"label": "docker build", "content": "docker build -t  ."},
+        {"label": "docker pull", "content": "docker pull "},
+        {"label": "docker push", "content": "docker push "}
+      ]
+    },
+    {
+      "id": "python_commands",
+      "name": "Python",
+      "icon": "python.png",
+      "order": 4,
+      "is_active": true,
+      "items": [
+        {"label": "python - Ejecutar script", "content": "python "},
+        {"label": "python -m venv", "content": "python -m venv venv"},
+        {"label": "pip install", "content": "pip install "},
+        {"label": "pip install -r requirements", "content": "pip install -r requirements.txt"},
+        {"label": "pip freeze", "content": "pip freeze > requirements.txt"},
+        {"label": "pip list", "content": "pip list"},
+        {"label": "pip show", "content": "pip show "},
+        {"label": "python -m pip install --upgrade pip", "content": "python -m pip install --upgrade pip"},
+        {"label": "pytest - Ejecutar tests", "content": "pytest"},
+        {"label": "pytest -v - Tests verbose", "content": "pytest -v"},
+        {"label": "pytest --cov", "content": "pytest --cov=."},
+        {"label": "python -m http.server", "content": "python -m http.server 8000"},
+        {"label": "python -c - Ejecutar código", "content": "python -c \"\""},
+        {"label": "Activar venv (Windows)", "content": ".\\venv\\Scripts\\activate"},
+        {"label": "Activar venv (Linux/Mac)", "content": "source venv/bin/activate"}
+      ]
+    },
+    {
+      "id": "npm_commands",
+      "name": "NPM",
+      "icon": "nodejs.png",
+      "order": 5,
+      "is_active": true,
+      "items": [
+        {"label": "npm init", "content": "npm init -y"},
+        {"label": "npm install", "content": "npm install "},
+        {"label": "npm install --save-dev", "content": "npm install --save-dev "},
+        {"label": "npm uninstall", "content": "npm uninstall "},
+        {"label": "npm update", "content": "npm update"},
+        {"label": "npm run", "content": "npm run "},
+        {"label": "npm start", "content": "npm start"},
+        {"label": "npm test", "content": "npm test"},
+        {"label": "npm run build", "content": "npm run build"},
+        {"label": "npm list", "content": "npm list"},
+        {"label": "npx", "content": "npx "},
+        {"label": "npm audit fix", "content": "npm audit fix"}
+      ]
+    },
+    {
+      "id": "useful_urls",
+      "name": "URLs",
+      "icon": "link.png",
+      "order": 6,
+      "is_active": true,
+      "items": [
+        {"label": "GitHub", "content": "https://github.com"},
+        {"label": "Stack Overflow", "content": "https://stackoverflow.com"},
+        {"label": "Python Docs", "content": "https://docs.python.org"},
+        {"label": "MDN Web Docs", "content": "https://developer.mozilla.org"},
+        {"label": "Docker Hub", "content": "https://hub.docker.com"},
+        {"label": "NPM Registry", "content": "https://www.npmjs.com"},
+        {"label": "PyPI", "content": "https://pypi.org"},
+        {"label": "Regex101", "content": "https://regex101.com"},
+        {"label": "JSON Formatter", "content": "https://jsonformatter.org"}
+      ]
+    },
+    {
+      "id": "code_snippets",
+      "name": "Snippets",
+      "icon": "code.png",
+      "order": 7,
+      "is_active": true,
+      "items": [
+        {"label": "Python: main block", "content": "if __name__ == '__main__':\n    pass"},
+        {"label": "Python: try-except", "content": "try:\n    pass\nexcept Exception as e:\n    print(f'Error: {e}')"},
+        {"label": "Python: list comprehension", "content": "[x for x in range(10)]"},
+        {"label": "JS: async function", "content": "async function name() {\n  try {\n    const result = await promise;\n  } catch (error) {\n    console.error(error);\n  }\n}"},
+        {"label": "JS: arrow function", "content": "const name = () => {}"},
+        {"label": "Git: .gitignore Python", "content": "venv/\n__pycache__/\n*.pyc\n.env\n*.log"},
+        {"label": "Docker: Dockerfile Python", "content": "FROM python:3.11-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nCOPY . .\nCMD [\"python\", \"main.py\"]"}
+      ]
+    },
+    {
+      "id": "settings",
+      "name": "Configuración",
+      "icon": "settings.png",
+      "order": 8,
+      "is_active": true,
+      "items": []
+    }
+  ]
+}

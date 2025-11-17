@@ -1,0 +1,11 @@
+INFO:database.db_manager:Creating new database...
+INFO:database.db_manager:Database schema created successfully
+INFO:database.db_manager:Database initialized at: C:\Users\ASUS\AppData\Local\Temp\test_db_x6l8ek1r\test.db
+INFO:database.db_manager:Database connection closed
+INFO:database.db_manager:Database already exists
+INFO:database.db_manager:Database initialized at: C:\Users\ASUS\AppData\Local\Temp\test_db_x6l8ek1r\test.db
+INFO:core.encryption_manager:Encryption manager initialized successfully
+INFO:core.file_manager:FileManager initialized
+INFO:core.file_manager:Created folder: C:\Users\ASUS\AppData\Local\Temp\widget_test_msu7uq2k\IMAGENES
+INFO:core.file_manager:File copied: C:\Users\ASUS\AppData\Local\Temp\source_v5jr9h09\test_image.jpg -> C:\Users\ASUS\AppData\Local\Temp\widget_test_msu7uq2k\IMAGENES\test_image.jpg
+INFO:core.file_manager:FileManager initialized
