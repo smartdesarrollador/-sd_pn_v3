@@ -107,7 +107,9 @@ FASE*.md
 GUIA_*.md
 
 
-
+widget_sidebar.db
+widget_sidebar.db-shm
+widget_sidebar.db-wal
 
 
 
