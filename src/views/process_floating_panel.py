@@ -63,9 +63,10 @@ class ProcessFloatingPanel(QWidget):
 
         # Resize handling
         self.resizing = False
-        self.resize_start_x = 0
-        self.resize_start_width = 0
-        self.resize_edge_width = 15
+        self.resize_direction = None  # 'right', 'bottom', 'bottom-right', 'left', 'top', etc.
+        self.resize_start_pos = QPoint()
+        self.resize_start_geometry = None
+        self.resize_edge_width = 15  # Width of the resize edge in pixels
 
         # Drag handling
         self.drag_position = QPoint()
@@ -152,7 +153,7 @@ class ProcessFloatingPanel(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidget(self.content_widget)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll_area.setStyleSheet("""
             QScrollArea {
@@ -169,6 +170,9 @@ class ProcessFloatingPanel(QWidget):
                 border-radius: 6px;
                 min-height: 20px;
             }
+            QScrollBar::handle:vertical:hover {
+                background-color: #00ffaa;
+            }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 height: 0px;
             }
@@ -178,9 +182,12 @@ class ProcessFloatingPanel(QWidget):
                 border-radius: 6px;
             }
             QScrollBar::handle:horizontal {
-                background-color: #00ff88;
+                background-color: #ff8800;
                 border-radius: 6px;
-                min-width: 20px;
+                min-width: 30px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #ffaa00;
             }
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
                 width: 0px;
@@ -980,59 +987,149 @@ class ProcessFloatingPanel(QWidget):
                 f"No se pudo abrir la ruta:\n{path}\n\nError: {str(e)}"
             )
 
-    # Mouse events for resize (right edge) and dragging
+    # Mouse events for resize (all edges) and dragging
+    def get_resize_direction(self, pos):
+        """
+        Determine resize direction based on mouse position
+
+        Returns:
+            str: 'right', 'left', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right', or None
+        """
+        x = pos.x()
+        y = pos.y()
+        w = self.width()
+        h = self.height()
+        edge = self.resize_edge_width
+
+        on_left = x <= edge
+        on_right = x >= w - edge
+        on_top = y <= edge
+        on_bottom = y >= h - edge
+
+        # Corners have priority
+        if on_top and on_left:
+            return 'top-left'
+        elif on_top and on_right:
+            return 'top-right'
+        elif on_bottom and on_left:
+            return 'bottom-left'
+        elif on_bottom and on_right:
+            return 'bottom-right'
+        # Edges
+        elif on_left:
+            return 'left'
+        elif on_right:
+            return 'right'
+        elif on_top:
+            return 'top'
+        elif on_bottom:
+            return 'bottom'
+
+        return None
+
+    def get_cursor_for_direction(self, direction):
+        """Get appropriate cursor for resize direction"""
+        cursor_map = {
+            'right': Qt.CursorShape.SizeHorCursor,
+            'left': Qt.CursorShape.SizeHorCursor,
+            'top': Qt.CursorShape.SizeVerCursor,
+            'bottom': Qt.CursorShape.SizeVerCursor,
+            'top-left': Qt.CursorShape.SizeFDiagCursor,
+            'bottom-right': Qt.CursorShape.SizeFDiagCursor,
+            'top-right': Qt.CursorShape.SizeBDiagCursor,
+            'bottom-left': Qt.CursorShape.SizeBDiagCursor,
+        }
+        return cursor_map.get(direction, Qt.CursorShape.ArrowCursor)
+
+    def event(self, event):
+        """Override event to handle hover for cursor changes"""
+        if event.type() == QEvent.Type.HoverMove:
+            pos = event.position().toPoint()
+            direction = self.get_resize_direction(pos)
+            if direction:
+                cursor = self.get_cursor_for_direction(direction)
+                self.setCursor(QCursor(cursor))
+            else:
+                self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+        return super().event(event)
+
     def mousePressEvent(self, event):
         """Handle mouse press for dragging or resizing"""
         if event.button() == Qt.MouseButton.LeftButton:
-            # Check if near right edge for resizing
-            if event.position().x() >= self.width() - self.resize_edge_width:
+            direction = self.get_resize_direction(event.pos())
+            if direction:
+                # Start resizing
                 self.resizing = True
-                self.resize_start_x = event.globalPosition().x()
-                self.resize_start_width = self.width()
+                self.resize_direction = direction
+                self.resize_start_pos = event.globalPosition().toPoint()
+                self.resize_start_geometry = self.geometry()
                 event.accept()
             else:
                 # Start dragging
                 self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
                 event.accept()
-            return
-        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        """Handle mouse move for dragging, resizing, and cursor updates"""
+        """Handle mouse move for dragging or resizing"""
         if event.buttons() == Qt.MouseButton.LeftButton:
             if self.resizing:
-                # Handle resizing
-                delta_x = event.globalPosition().x() - self.resize_start_x
-                new_width = self.resize_start_width + int(delta_x)
+                # Calculate delta from start position
+                current_pos = event.globalPosition().toPoint()
+                delta_x = current_pos.x() - self.resize_start_pos.x()
+                delta_y = current_pos.y() - self.resize_start_pos.y()
 
-                # Clamp width
-                if new_width < self.minimumWidth():
-                    new_width = self.minimumWidth()
-                elif new_width > self.maximumWidth():
-                    new_width = self.maximumWidth()
+                # Get original geometry
+                x = self.resize_start_geometry.x()
+                y = self.resize_start_geometry.y()
+                w = self.resize_start_geometry.width()
+                h = self.resize_start_geometry.height()
 
-                # Update width (position stays the same, only right edge moves)
-                self.resize(new_width, self.height())
+                # Calculate new geometry based on resize direction
+                new_x = x
+                new_y = y
+                new_w = w
+                new_h = h
+
+                if 'right' in self.resize_direction:
+                    new_w = w + delta_x
+                if 'left' in self.resize_direction:
+                    new_w = w - delta_x
+                    new_x = x + delta_x
+                if 'bottom' in self.resize_direction:
+                    new_h = h + delta_y
+                if 'top' in self.resize_direction:
+                    new_h = h - delta_y
+                    new_y = y + delta_y
+
+                # Apply constraints
+                new_w = max(self.minimumWidth(), min(new_w, self.maximumWidth()))
+                new_h = max(self.minimumHeight(), min(new_h, self.maximumHeight()))
+
+                # Adjust position if size was constrained (for left/top edges)
+                if 'left' in self.resize_direction:
+                    new_x = x + (w - new_w)
+                if 'top' in self.resize_direction:
+                    new_y = y + (h - new_h)
+
+                # Apply new geometry
+                self.setGeometry(new_x, new_y, new_w, new_h)
+
                 event.accept()
             else:
-                # Handle dragging
+                # Dragging
                 self.move(event.globalPosition().toPoint() - self.drag_position)
                 event.accept()
-        else:
-            # Update cursor based on position (near right edge)
-            if event.position().x() >= self.width() - self.resize_edge_width:
-                self.setCursor(Qt.CursorShape.SizeHorCursor)
-            else:
-                self.setCursor(Qt.CursorShape.ArrowCursor)
-
-        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        """Handle mouse release for resize or drag"""
+        """Handle mouse release to end resizing"""
         if event.button() == Qt.MouseButton.LeftButton:
             if self.resizing:
                 self.resizing = False
-                self.setCursor(Qt.CursorShape.ArrowCursor)
+                self.resize_direction = None
+                self.resize_start_geometry = None
+                # Save new width to config
+                if self.config_manager:
+                    self.config_manager.set_setting('panel_width', self.width())
                 # Schedule panel update after resize
                 self.schedule_panel_update()
                 event.accept()
@@ -1040,8 +1137,6 @@ class ProcessFloatingPanel(QWidget):
                 # End of drag - schedule panel update
                 self.schedule_panel_update()
                 event.accept()
-            return
-        super().mouseReleaseEvent(event)
 
     def moveEvent(self, event):
         """Handle window move - schedule panel state update"""
