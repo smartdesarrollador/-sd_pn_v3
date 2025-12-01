@@ -9,7 +9,7 @@ Componentes soportados:
 """
 
 from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
-                             QLabel, QFrame, QTextEdit, QMessageBox)
+                             QLabel, QFrame, QTextEdit, QMessageBox, QCheckBox)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QCursor
 import logging
@@ -25,6 +25,7 @@ class ProjectComponentWidget(QWidget):
     edit_content_requested = pyqtSignal(int, str)  # component_id, new_content
     move_up_requested = pyqtSignal(int)  # component_id
     move_down_requested = pyqtSignal(int)  # component_id
+    checkbox_changed = pyqtSignal(int, bool)  # component_id, checked
 
     def __init__(self, component_data: dict, view_mode: str = 'edit', parent=None):
         """
@@ -286,6 +287,35 @@ class ProjectComponentWidget(QWidget):
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(3)
 
+        # Checkbox para seleccionar posición de inserción
+        self.checkbox = QCheckBox()
+        self.checkbox.setToolTip("Marcar para insertar nuevos elementos debajo de este")
+        self.checkbox.setStyleSheet("""
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #4d4d4d;
+                border-radius: 3px;
+                background-color: #2d2d2d;
+            }
+            QCheckBox::indicator:hover {
+                border-color: #00ff88;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #00ff88;
+                border-color: #00ff88;
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: #00ccff;
+                border-color: #00ccff;
+            }
+        """)
+        self.checkbox.stateChanged.connect(self.on_checkbox_changed)
+        controls_layout.addWidget(self.checkbox)
+
         # Botón mover arriba
         move_up_btn = QPushButton("▲")
         move_up_btn.setFixedSize(24, 24)
@@ -377,6 +407,14 @@ class ProjectComponentWidget(QWidget):
         component_id = self.component_data['id']
         self.move_down_requested.emit(component_id)
         logger.info(f"Move down requested for component: {component_id}")
+
+    def on_checkbox_changed(self, state):
+        """Al cambiar el estado del checkbox"""
+        if self.view_mode == 'edit' and hasattr(self, 'checkbox'):
+            component_id = self.component_data['id']
+            is_checked = state == Qt.CheckState.Checked.value
+            self.checkbox_changed.emit(component_id, is_checked)
+            logger.info(f"Checkbox changed for component {component_id}: {is_checked}")
 
     def set_view_mode(self, mode: str):
         """Cambia el modo de vista"""

@@ -37,6 +37,7 @@ class ProjectsWindow(QMainWindow):
         self.export_manager = ProjectExportManager(db_manager)
         self.current_project_id = None
         self._view_mode = 'edit'  # 'edit' o 'clean'
+        self._selected_insert_position = None  # (item_type, item_id, order_index) del elemento seleccionado
 
         self.init_ui()
         self.load_projects()
@@ -390,6 +391,7 @@ class ProjectsWindow(QMainWindow):
         widget.edit_description_requested.connect(self._on_relation_description_edit)
         widget.move_up_requested.connect(self._on_move_up)
         widget.move_down_requested.connect(self._on_move_down)
+        widget.checkbox_changed.connect(lambda relation_id, checked: self._on_checkbox_changed('relation', relation_id, relation, checked))
 
         self.canvas_layout.insertWidget(self.canvas_layout.count() - 1, widget)
 
@@ -407,6 +409,7 @@ class ProjectsWindow(QMainWindow):
         widget.edit_content_requested.connect(self._on_component_content_edit)
         widget.move_up_requested.connect(self._on_move_up)
         widget.move_down_requested.connect(self._on_move_down)
+        widget.checkbox_changed.connect(lambda component_id, checked: self._on_checkbox_changed('component', component_id, component, checked))
 
         self.canvas_layout.insertWidget(self.canvas_layout.count() - 1, widget)
 
@@ -453,6 +456,70 @@ class ProjectsWindow(QMainWindow):
                 logger.info(f"Component {component_id} content updated")
         except Exception as e:
             logger.error(f"Error updating component content: {e}")
+
+    def _on_checkbox_changed(self, item_type: str, item_id: int, item_data: dict, checked: bool):
+        """Maneja cambio de checkbox para seleccionar posición de inserción"""
+        if checked:
+            # Guardar posición seleccionada
+            self._selected_insert_position = (item_type, item_id, item_data.get('order_index'))
+            logger.info(f"Insert position selected: {item_type} #{item_id} (order_index: {item_data.get('order_index')})")
+
+            # Desmarcar todos los demás checkboxes
+            self._uncheck_all_except(item_type, item_id)
+        else:
+            # Si se desmarca, limpiar posición seleccionada
+            if self._selected_insert_position and self._selected_insert_position[1] == item_id:
+                self._selected_insert_position = None
+                logger.info("Insert position cleared")
+
+    def _uncheck_all_except(self, except_type: str, except_id: int):
+        """Desmarca todos los checkboxes excepto el especificado"""
+        # Iterar sobre todos los widgets en el canvas
+        for i in range(self.canvas_layout.count() - 1):  # -1 para excluir el stretch
+            widget = self.canvas_layout.itemAt(i).widget()
+            if widget and hasattr(widget, 'checkbox'):
+                # Determinar el ID del widget
+                widget_id = None
+                widget_type = None
+
+                if isinstance(widget, ProjectRelationWidget):
+                    widget_id = widget.relation_data.get('id')
+                    widget_type = 'relation'
+                elif isinstance(widget, ProjectComponentWidget):
+                    widget_id = widget.component_data.get('id')
+                    widget_type = 'component'
+
+                # Si no es el widget excepto, desmarcar
+                if widget_id and (widget_type != except_type or widget_id != except_id):
+                    widget.checkbox.blockSignals(True)  # Bloquear señales para evitar recursión
+                    widget.checkbox.setChecked(False)
+                    widget.checkbox.blockSignals(False)
+
+    def _shift_order_indices_down(self, from_order: int):
+        """Incrementa el order_index de todos los elementos >= from_order"""
+        if not self.current_project_id:
+            return
+
+        try:
+            # Obtener todo el contenido
+            content = self.db.get_project_content_ordered(self.current_project_id)
+
+            # Incrementar order_index de elementos >= from_order
+            for item in content:
+                current_order = item.get('order_index')
+                if current_order is not None and current_order >= from_order:
+                    new_order = current_order + 1
+
+                    # Determinar tipo y actualizar
+                    if item.get('entity_type') is not None:
+                        self.db.update_relation_order(item['id'], new_order)
+                        logger.info(f"Shifted relation {item['id']} from {current_order} to {new_order}")
+                    elif item.get('component_type') is not None:
+                        self.db.update_component_order(item['id'], new_order)
+                        logger.info(f"Shifted component {item['id']} from {current_order} to {new_order}")
+
+        except Exception as e:
+            logger.error(f"Error shifting order indices: {e}")
 
     def _on_move_up(self, item_id: int):
         """Maneja mover elemento hacia arriba"""
@@ -643,8 +710,21 @@ class ProjectsWindow(QMainWindow):
     def _on_entity_selected(self, entity_type: str, entity_id: int, description: str):
         """Maneja la selección de una entidad desde el selector"""
         try:
+            # Calcular order_index basado en posición seleccionada
+            order_index = None
+            if self._selected_insert_position:
+                # Insertar debajo del elemento seleccionado
+                # order_index = order_index_seleccionado + 1
+                selected_order = self._selected_insert_position[2]
+                if selected_order is not None:
+                    order_index = selected_order + 1
+                    logger.info(f"Inserting below position {selected_order}, new order_index: {order_index}")
+
+                    # Incrementar order_index de todos los elementos posteriores
+                    self._shift_order_indices_down(selected_order + 1)
+
             success = self.project_manager.add_entity_to_project(
-                self.current_project_id, entity_type, entity_id, description
+                self.current_project_id, entity_type, entity_id, description, order_index
             )
 
             if success:
@@ -671,8 +751,20 @@ class ProjectsWindow(QMainWindow):
             if not ok:
                 return
 
+        # Calcular order_index basado en posición seleccionada
+        order_index = None
+        if self._selected_insert_position:
+            # Insertar debajo del elemento seleccionado
+            selected_order = self._selected_insert_position[2]
+            if selected_order is not None:
+                order_index = selected_order + 1
+                logger.info(f"Inserting component below position {selected_order}, new order_index: {order_index}")
+
+                # Incrementar order_index de todos los elementos posteriores
+                self._shift_order_indices_down(selected_order + 1)
+
         success = self.project_manager.add_component_to_project(
-            self.current_project_id, component_type, content
+            self.current_project_id, component_type, content, order_index
         )
 
         if success:

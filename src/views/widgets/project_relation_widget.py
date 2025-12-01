@@ -10,7 +10,7 @@ Muestra un elemento (tag, item, category, list, etc.) del proyecto con:
 """
 
 from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
-                             QLabel, QFrame, QTextEdit, QMessageBox)
+                             QLabel, QFrame, QTextEdit, QMessageBox, QCheckBox)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QCursor
 import logging
@@ -27,6 +27,7 @@ class ProjectRelationWidget(QWidget):
     edit_description_requested = pyqtSignal(int, str)  # relation_id, new_description
     move_up_requested = pyqtSignal(int)  # relation_id
     move_down_requested = pyqtSignal(int)  # relation_id
+    checkbox_changed = pyqtSignal(int, bool)  # relation_id, checked
 
     def __init__(self, relation_data: dict, metadata: dict, view_mode: str = 'edit', parent=None):
         """
@@ -73,9 +74,39 @@ class ProjectRelationWidget(QWidget):
         container_layout.setContentsMargins(8, 8, 8, 8)
         container_layout.setSpacing(5)
 
-        # Fila superior: Botón principal + controles
+        # Fila superior: Checkbox + Botón principal + controles
         top_row = QHBoxLayout()
         top_row.setSpacing(8)
+
+        # Checkbox para seleccionar posición de inserción (solo en modo edición)
+        if self.view_mode == 'edit':
+            self.checkbox = QCheckBox()
+            self.checkbox.setToolTip("Marcar para insertar nuevos elementos debajo de este")
+            self.checkbox.setStyleSheet("""
+                QCheckBox {
+                    spacing: 5px;
+                }
+                QCheckBox::indicator {
+                    width: 18px;
+                    height: 18px;
+                    border: 2px solid #4d4d4d;
+                    border-radius: 3px;
+                    background-color: #2d2d2d;
+                }
+                QCheckBox::indicator:hover {
+                    border-color: #00ff88;
+                }
+                QCheckBox::indicator:checked {
+                    background-color: #00ff88;
+                    border-color: #00ff88;
+                }
+                QCheckBox::indicator:checked:hover {
+                    background-color: #00ccff;
+                    border-color: #00ccff;
+                }
+            """)
+            self.checkbox.stateChanged.connect(self.on_checkbox_changed)
+            top_row.addWidget(self.checkbox)
 
         # Botón principal del elemento (clickeable para copiar)
         self.main_button = QPushButton(f"{self.metadata['icon']} {self.metadata['name']}")
@@ -268,6 +299,14 @@ class ProjectRelationWidget(QWidget):
         relation_id = self.relation_data['id']
         self.move_down_requested.emit(relation_id)
         logger.info(f"Move down requested for relation: {relation_id}")
+
+    def on_checkbox_changed(self, state):
+        """Al cambiar el estado del checkbox"""
+        if self.view_mode == 'edit' and hasattr(self, 'checkbox'):
+            relation_id = self.relation_data['id']
+            is_checked = state == Qt.CheckState.Checked.value
+            self.checkbox_changed.emit(relation_id, is_checked)
+            logger.info(f"Checkbox changed for relation {relation_id}: {is_checked}")
 
     def set_view_mode(self, mode: str):
         """Cambia el modo de vista"""
