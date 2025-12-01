@@ -371,7 +371,7 @@ class Sidebar(QWidget):
         self.quick_access_button.setStyleSheet(f"""
             QPushButton {{
                 background-color: {self.theme.get_color('background_deep')};
-                color: #ffaa00;
+                color: #66d9ef;
                 border: none;
                 border-top: 2px solid {self.theme.get_color('surface')};
                 border-bottom: 2px solid {self.theme.get_color('surface')};
@@ -388,7 +388,7 @@ class Sidebar(QWidget):
             }}
             QPushButton:pressed {{
                 background-color: {self.theme.get_color('surface')};
-                color: #ffaa00;
+                color: #66d9ef;
             }}
         """)
         self.quick_access_button.clicked.connect(self.on_quick_access_clicked)
