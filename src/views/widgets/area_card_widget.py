@@ -25,6 +25,7 @@ class AreaCardWidget(QWidget):
 
     # Señales
     clicked = pyqtSignal(str)  # Emite el contenido a copiar
+    view_items_requested = pyqtSignal(str, int, str, str)  # relation_type, entity_id, entity_name, entity_icon
 
     # Colores por tipo de elemento
     TYPE_COLORS = {
@@ -293,6 +294,34 @@ class AreaCardWidget(QWidget):
             """)
             footer_layout.addWidget(content_type_label)
 
+        # Botón "Ver items" para categorías, tags y listas
+        # En áreas, podemos ver items de: categorías, tags, listas, o del área completa
+        if self.item_type in ['category', 'tag', 'list']:
+            self.view_items_btn = QPushButton("👁️")
+            self.view_items_btn.setFixedSize(28, 28)
+            self.view_items_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            self.view_items_btn.setToolTip("Ver todos los items relacionados")
+            border_color = self.TYPE_COLORS.get(self.item_type, '#555555')
+            self.view_items_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #1e1e1e;
+                    color: {border_color};
+                    border: 1px solid {border_color};
+                    border-radius: 4px;
+                    font-size: 12pt;
+                    padding: 0px;
+                }}
+                QPushButton:hover {{
+                    background-color: {border_color}40;
+                    border-color: #ffffff;
+                }}
+                QPushButton:pressed {{
+                    background-color: {border_color}60;
+                }}
+            """)
+            self.view_items_btn.clicked.connect(self._on_view_items_clicked)
+            footer_layout.addWidget(self.view_items_btn)
+
         footer_layout.addStretch()
 
         # Fecha de última modificación (si existe)
@@ -406,6 +435,24 @@ class AreaCardWidget(QWidget):
 
         # Mostrar feedback visual
         self.show_copy_feedback()
+
+    def _on_view_items_clicked(self):
+        """Callback cuando se hace click en el botón 'Ver items'"""
+        # Obtener datos según el tipo
+        entity_id = self.item_data.get('id', 0)
+        entity_name = self.item_data.get('name', 'Sin nombre')
+        entity_icon = self.item_data.get('icon', self.TYPE_ICONS.get(self.item_type, '📄'))
+
+        # Determinar el relation_type correcto
+        # Para tags de área, usamos 'area_tag' en lugar de 'tag'
+        relation_type = self.item_type
+        if self.item_type == 'tag':
+            relation_type = 'area_tag'
+
+        logger.info(f"View items requested for {relation_type}: {entity_name} (ID: {entity_id})")
+
+        # Emitir señal con los datos necesarios
+        self.view_items_requested.emit(relation_type, entity_id, entity_name, entity_icon)
 
     def _show_full_description(self):
         """Muestra la descripción completa en un diálogo"""

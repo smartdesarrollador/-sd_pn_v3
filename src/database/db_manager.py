@@ -7099,6 +7099,211 @@ class DBManager:
 
         return area
 
+    # ==================== ITEMS DE ÁREAS (Para Paneles Flotantes) ====================
+
+    def get_items_by_area(self, area_id: int) -> List[Dict]:
+        """
+        Obtiene todos los items de categorías relacionadas con un área
+
+        Este método obtiene items de dos formas:
+        1. Items de categorías asociadas al área (entity_type='category')
+        2. Items directamente asociados al área (entity_type='item')
+
+        Args:
+            area_id: ID del área
+
+        Returns:
+            List[Dict]: Lista de items (con duplicados removidos si un item está en ambas formas)
+        """
+        query = """
+            SELECT DISTINCT i.*
+            FROM items i
+            WHERE i.id IN (
+                -- Items a través de categorías
+                SELECT i2.id
+                FROM items i2
+                INNER JOIN area_relations ar ON ar.entity_id = i2.category_id
+                WHERE ar.area_id = ? AND ar.entity_type = 'category'
+
+                UNION
+
+                -- Items directamente asociados al área
+                SELECT ar2.entity_id
+                FROM area_relations ar2
+                WHERE ar2.area_id = ? AND ar2.entity_type = 'item'
+            )
+            ORDER BY i.label ASC
+        """
+        return self.execute_query(query, (area_id, area_id))
+
+    def get_items_by_area_tag(self, tag_id: int, area_id: int = None) -> List[Dict]:
+        """
+        Obtiene items relacionados con un tag de área
+
+        Busca items que están en:
+        1. Relaciones de área que tienen ese tag
+        2. Opcionalmente filtrado por un área específica
+
+        Args:
+            tag_id: ID del tag de área
+            area_id: ID del área (opcional, para filtrar por área específica)
+
+        Returns:
+            List[Dict]: Lista de items
+        """
+        if area_id is not None:
+            # Filtrar por área específica
+            query = """
+                SELECT DISTINCT i.*
+                FROM items i
+                WHERE i.id IN (
+                    -- Items a través de categorías con el tag
+                    SELECT i2.id
+                    FROM items i2
+                    INNER JOIN area_relations ar ON ar.entity_id = i2.category_id
+                    INNER JOIN area_element_tag_associations aeta ON aeta.area_relation_id = ar.id
+                    WHERE aeta.tag_id = ?
+                      AND ar.entity_type = 'category'
+                      AND ar.area_id = ?
+
+                    UNION
+
+                    -- Items directamente asociados con el tag
+                    SELECT ar2.entity_id
+                    FROM area_relations ar2
+                    INNER JOIN area_element_tag_associations aeta2 ON aeta2.area_relation_id = ar2.id
+                    WHERE aeta2.tag_id = ?
+                      AND ar2.entity_type = 'item'
+                      AND ar2.area_id = ?
+                )
+                ORDER BY i.label ASC
+            """
+            return self.execute_query(query, (tag_id, area_id, tag_id, area_id))
+        else:
+            # Sin filtro de área
+            query = """
+                SELECT DISTINCT i.*
+                FROM items i
+                WHERE i.id IN (
+                    -- Items a través de categorías con el tag
+                    SELECT i2.id
+                    FROM items i2
+                    INNER JOIN area_relations ar ON ar.entity_id = i2.category_id
+                    INNER JOIN area_element_tag_associations aeta ON aeta.area_relation_id = ar.id
+                    WHERE aeta.tag_id = ? AND ar.entity_type = 'category'
+
+                    UNION
+
+                    -- Items directamente asociados con el tag
+                    SELECT ar2.entity_id
+                    FROM area_relations ar2
+                    INNER JOIN area_element_tag_associations aeta2 ON aeta2.area_relation_id = ar2.id
+                    WHERE aeta2.tag_id = ? AND ar2.entity_type = 'item'
+                )
+                ORDER BY i.label ASC
+            """
+            return self.execute_query(query, (tag_id, tag_id))
+
+    def get_items_by_item_tag_in_area(self, tag_id: int, area_id: int = None) -> List[Dict]:
+        """
+        Obtiene items que tienen un tag de item específico y están en un área
+
+        Esta función busca en la tabla 'item_tags' (tags normales de items),
+        NO en 'area_element_tags' (tags de área).
+
+        Args:
+            tag_id: ID del tag de item (de la tabla 'tags')
+            area_id: ID del área (opcional, para filtrar por área específica)
+
+        Returns:
+            List[Dict]: Lista de items que tienen ese tag y están en el área
+        """
+        if area_id is not None:
+            # Filtrar por área específica
+            query = """
+                SELECT DISTINCT i.*
+                FROM items i
+                INNER JOIN item_tags it ON it.item_id = i.id
+                WHERE it.tag_id = ?
+                  AND i.id IN (
+                      -- Items a través de categorías en el área
+                      SELECT i2.id
+                      FROM items i2
+                      INNER JOIN area_relations ar ON ar.entity_id = i2.category_id
+                      WHERE ar.area_id = ? AND ar.entity_type = 'category'
+
+                      UNION
+
+                      -- Items directamente asociados al área
+                      SELECT ar2.entity_id
+                      FROM area_relations ar2
+                      WHERE ar2.area_id = ? AND ar2.entity_type = 'item'
+                  )
+                ORDER BY i.label ASC
+            """
+            return self.execute_query(query, (tag_id, area_id, area_id))
+        else:
+            # Sin filtro de área - todos los items con ese tag que están en algún área
+            query = """
+                SELECT DISTINCT i.*
+                FROM items i
+                INNER JOIN item_tags it ON it.item_id = i.id
+                WHERE it.tag_id = ?
+                  AND (
+                      -- Items en categorías que están en áreas
+                      EXISTS (
+                          SELECT 1
+                          FROM area_relations ar
+                          WHERE ar.entity_id = i.category_id
+                            AND ar.entity_type = 'category'
+                      )
+                      OR
+                      -- Items directamente en áreas
+                      EXISTS (
+                          SELECT 1
+                          FROM area_relations ar2
+                          WHERE ar2.entity_id = i.id
+                            AND ar2.entity_type = 'item'
+                      )
+                  )
+                ORDER BY i.label ASC
+            """
+            return self.execute_query(query, (tag_id,))
+
+    def get_items_by_category_in_area(self, category_id: int, area_id: int) -> List[Dict]:
+        """
+        Obtiene todos los items de una categoría específica dentro de un área
+
+        Verifica que la categoría esté asociada al área antes de retornar los items.
+
+        Args:
+            category_id: ID de la categoría
+            area_id: ID del área
+
+        Returns:
+            List[Dict]: Lista de items de la categoría (vacía si la categoría no está en el área)
+        """
+        # Verificar que la categoría esté en el área
+        verification_query = """
+            SELECT COUNT(*) as count
+            FROM area_relations
+            WHERE area_id = ? AND entity_type = 'category' AND entity_id = ?
+        """
+        verification = self.execute_query(verification_query, (area_id, category_id))
+
+        if not verification or verification[0]['count'] == 0:
+            logger.warning(f"Category {category_id} is not associated with area {area_id}")
+            return []
+
+        # Obtener items de la categoría
+        query = """
+            SELECT *
+            FROM items
+            WHERE category_id = ? AND is_active = 1
+            ORDER BY label ASC
+        """
+        return self.execute_query(query, (category_id,))
+
     # ==================== RELACIONES DE ÁREAS ====================
 
     def add_area_relation(self, area_id: int, entity_type: str, entity_id: int,
