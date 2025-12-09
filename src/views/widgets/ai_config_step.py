@@ -25,7 +25,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from database.db_manager import DBManager
 from models.bulk_item_data import BulkItemDefaults, BulkImportConfig
-from views.widgets.tag_group_selector import TagGroupSelector
+from views.widgets.project_tag_selector import ProjectTagSelector
+from core.global_tag_manager import GlobalTagManager
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,13 @@ class ConfigStep(QWidget):
         super().__init__(parent)
         self.db = db_manager
         self.categories = []
+
+        # Initialize GlobalTagManager
+        self.global_tag_manager = None
+        try:
+            self.global_tag_manager = GlobalTagManager(self.db)
+        except Exception as e:
+            logger.error(f"Could not initialize GlobalTagManager: {e}")
 
         self.init_ui()
         self.load_categories()
@@ -185,27 +193,20 @@ class ConfigStep(QWidget):
         self.type_combo.currentTextChanged.connect(self.on_type_changed)
         defaults_layout.addRow(type_label, self.type_combo)
 
-        # Tags con TagGroupSelector
+        # Tags con ProjectTagSelector
         tags_label = QLabel("Tags:")
         tags_label.setStyleSheet("color: #ffffff; font-weight: normal;")
+        defaults_layout.addRow(tags_label)
 
-        # Usar TagGroupSelector si está disponible
-        try:
-            db_path = str(Path(self.db.db_path))
-            self.tags_selector = TagGroupSelector(db_path=db_path)
-            self.tags_selector.setStyleSheet("""
-                QWidget {
-                    background-color: #1e1e1e;
-                    border: 1px solid #3d3d3d;
-                    border-radius: 3px;
-                }
-            """)
-            defaults_layout.addRow(tags_label, self.tags_selector)
-        except Exception as e:
-            logger.warning(f"TagGroupSelector not available, using QLineEdit: {e}")
-            self.tags_selector = QLineEdit()
-            self.tags_selector.setPlaceholderText("Ej: git, deploy, python")
-            self.tags_selector.setStyleSheet("""
+        if self.global_tag_manager:
+            self.tag_selector = ProjectTagSelector(self.global_tag_manager)
+            self.tag_selector.setMinimumHeight(150)
+            defaults_layout.addRow(self.tag_selector)
+        else:
+            # Fallback if no manager available
+            self.tag_selector = QLineEdit()
+            self.tag_selector.setPlaceholderText("tag1, tag2, tag3 (opcional)")
+            self.tag_selector.setStyleSheet("""
                 QLineEdit {
                     background-color: #1e1e1e;
                     color: #ffffff;
@@ -221,7 +222,7 @@ class ConfigStep(QWidget):
                     border-color: #00d4ff;
                 }
             """)
-            defaults_layout.addRow(tags_label, self.tags_selector)
+            defaults_layout.addRow(self.tag_selector)
 
         # Checkboxes (favorito, sensible, lista)
         checkbox_layout = QVBoxLayout()
@@ -438,12 +439,20 @@ class ConfigStep(QWidget):
         category_name = self.categories[self.category_combo.currentIndex()]['name'] if self.categories else "Unknown"
 
         # Obtener tags
-        if hasattr(self.tags_selector, 'get_selected_tags'):
-            # TagGroupSelector
-            tags = ', '.join(self.tags_selector.get_selected_tags())
+        tags_list = []
+        if self.tag_selector and hasattr(self.tag_selector, 'get_selected_tags'):
+            # ProjectTagSelector
+            selected_ids = self.tag_selector.get_selected_tags()
+            for tag_id in selected_ids:
+                tag = self.global_tag_manager.get_tag(tag_id)
+                if tag:
+                    tags_list.append(tag.name)
+            tags = ', '.join(tags_list) if tags_list else ""
+        elif hasattr(self, 'tag_selector'):
+            # QLineEdit fallback
+            tags = self.tag_selector.text().strip()
         else:
-            # QLineEdit
-            tags = self.tags_selector.text().strip()
+            tags = ""
 
         # Crear defaults
         # NOTA: is_list y list_group son campos legacy para compatibilidad
@@ -497,11 +506,27 @@ class ConfigStep(QWidget):
         self.type_combo.setCurrentText(config.defaults.type)
 
         # Tags
-        if hasattr(self.tags_selector, 'set_tags'):
-            tags_list = [t.strip() for t in config.defaults.tags.split(',') if t.strip()]
-            self.tags_selector.set_tags(tags_list)
-        else:
-            self.tags_selector.setText(config.defaults.tags)
+        if self.tag_selector and self.global_tag_manager and hasattr(self.tag_selector, 'set_selected_tags'):
+            # ProjectTagSelector - convert tag names to IDs
+            tag_ids = []
+            if config.defaults.tags:
+                tags_list = [t.strip() for t in config.defaults.tags.split(',') if t.strip()]
+                for tag_name in tags_list:
+                    tag = self.global_tag_manager.get_tag_by_name(tag_name)
+                    if tag:
+                        tag_ids.append(tag.id)
+                    else:
+                        # If tag doesn't exist, create it
+                        try:
+                            new_tag = self.global_tag_manager.create_tag(tag_name)
+                            if new_tag:
+                                tag_ids.append(new_tag.id)
+                        except Exception as e:
+                            logger.warning(f"Could not load tag '{tag_name}': {e}")
+            self.tag_selector.set_selected_tags(tag_ids)
+        elif hasattr(self, 'tag_selector'):
+            # QLineEdit fallback
+            self.tag_selector.setText(config.defaults.tags)
 
         # Checkboxes
         self.is_favorite_check.setChecked(config.defaults.is_favorite == 1)
