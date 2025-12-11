@@ -1257,13 +1257,138 @@ class BulkItemCreatorDialog(QWidget):
 
     def _on_create_project_tag(self):
         """Callback para crear nuevo tag de proyecto/área"""
-        # TODO: Implementar diálogo de creación de tag
-        QMessageBox.information(self, "TODO", "Crear tag de proyecto - Por implementar")
+        # Obtener tab actual
+        current_tab = self._get_current_tab_content()
+        if not current_tab:
+            return
+
+        # Verificar que haya proyecto o área seleccionado
+        has_project_or_area = current_tab.context_section.has_project_or_area()
+        if not has_project_or_area:
+            QMessageBox.warning(
+                self,
+                "Proyecto/Área requerido",
+                "Primero debe seleccionar un Proyecto o Área para crear tags asociados."
+            )
+            return
+
+        # Solicitar nombre del tag
+        name, ok = QInputDialog.getText(
+            self,
+            "Crear Tag de Proyecto/Área",
+            "Nombre del tag:",
+            text=""
+        )
+
+        if not ok or not name.strip():
+            logger.info("Creación de tag de proyecto/área cancelada")
+            return
+
+        try:
+            # Crear tag usando el TagManager
+            tag = self.tag_manager.create_tag(
+                name=name.strip(),
+                color="#2196F3",  # Color por defecto (azul)
+                description=f"Tag creado desde Creador Masivo"
+            )
+
+            if not tag:
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    "No se pudo crear el tag. Puede que ya exista un tag con ese nombre."
+                )
+                return
+
+            logger.info(f"Tag de proyecto/área creado: {name} (ID: {tag.id})")
+
+            # Recargar tags en el tab actual
+            project_id = current_tab.context_section.get_project_id()
+            area_id = current_tab.context_section.get_area_id()
+
+            if project_id:
+                # Cargar tags del proyecto
+                tags = self.tag_manager.get_tags_for_project(project_id)
+                tag_names = [t.name for t in tags]
+
+                # Agregar el tag recién creado si no está en la lista
+                if name.strip() not in tag_names:
+                    tag_names.append(name.strip())
+
+                current_tab.project_tags_section.load_tags(tag_names)
+                # Auto-seleccionar el tag recién creado
+                current_tab.project_tags_section.add_tag(name.strip(), select=True)
+
+            elif area_id:
+                # Cargar tags del área
+                tags = self.tag_manager.get_tags_for_area(area_id)
+                tag_names = [t.name for t in tags]
+
+                # Agregar el tag recién creado si no está en la lista
+                if name.strip() not in tag_names:
+                    tag_names.append(name.strip())
+
+                current_tab.project_tags_section.load_tags(tag_names)
+                # Auto-seleccionar el tag recién creado
+                current_tab.project_tags_section.add_tag(name.strip(), select=True)
+
+            QMessageBox.information(
+                self,
+                "Éxito",
+                f"Tag '{name}' creado y seleccionado correctamente."
+            )
+
+        except Exception as e:
+            logger.error(f"Error creando tag de proyecto/área: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al crear tag:\n{str(e)}"
+            )
 
     def _on_create_item_tag(self):
         """Callback para crear nuevo tag de item"""
-        # TODO: Implementar diálogo de creación de tag
-        QMessageBox.information(self, "TODO", "Crear tag de item - Por implementar")
+        # Solicitar nombre del tag
+        name, ok = QInputDialog.getText(
+            self,
+            "Crear Tag de Item",
+            "Nombre del tag:",
+            text=""
+        )
+
+        if not ok or not name.strip():
+            logger.info("Creación de tag de item cancelada")
+            return
+
+        try:
+            # Crear tag en la tabla general de tags (para items)
+            tag_id = self.db.get_or_create_tag(name.strip())
+
+            if not tag_id:
+                QMessageBox.critical(self, "Error", "No se pudo crear el tag")
+                return
+
+            logger.info(f"Tag de item creado: {name} (ID: {tag_id})")
+
+            # Obtener tab actual para auto-seleccionar el tag
+            current_tab = self._get_current_tab_content()
+            if current_tab:
+                # Auto-seleccionar el tag recién creado
+                current_tab.item_tags_section.add_tag(name.strip())
+
+            QMessageBox.information(
+                self,
+                "Éxito",
+                f"Tag '{name}' creado y agregado correctamente."
+            )
+
+        except Exception as e:
+            logger.error(f"Error creando tag de item: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al crear tag:\n{str(e)}"
+            )
 
     def _on_close_clicked(self):
         """Callback del botón cerrar del header"""

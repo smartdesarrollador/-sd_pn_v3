@@ -47,12 +47,12 @@ class TagChip(QWidget):
     def _setup_ui(self):
         """Configura la interfaz del chip"""
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setContentsMargins(10, 5, 10, 5)
         layout.setSpacing(0)
 
         # Etiqueta del tag
         self.label = QLabel(self.tag_name)
-        self.label.setFont(QFont("Segoe UI", 11))
+        self.label.setFont(QFont("Segoe UI", 10))
         layout.addWidget(self.label)
 
         # Hacer clickeable
@@ -60,28 +60,44 @@ class TagChip(QWidget):
 
     def _update_style(self):
         """Actualiza el estilo según el estado de selección"""
+        # Establecer propiedad para usar en el selector CSS
+        self.setProperty("selected", self.is_selected)
+
         if self.is_selected:
+            # Estilo seleccionado - MUY NOTORIO
             self.setStyleSheet("""
-                TagChip {
-                    background-color: #2196F3;
-                    border: 1px solid #1976D2;
-                    border-radius: 12px;
+                TagChip[selected="true"] {
+                    background-color: #1976D2 !important;
+                    border: 2px solid #0D47A1 !important;
+                    border-radius: 12px !important;
+                    padding: 5px 10px !important;
                 }
-                QLabel {
-                    color: #ffffff;
+                TagChip[selected="true"] QLabel {
+                    color: #ffffff !important;
+                    font-weight: bold !important;
                 }
             """)
         else:
+            # Estilo no seleccionado - Bordes MUY VISIBLES como en el ejemplo
             self.setStyleSheet("""
-                TagChip {
-                    background-color: #3d3d3d;
-                    border: 1px solid #555;
-                    border-radius: 12px;
+                TagChip[selected="false"] {
+                    background-color: #2d2d2d !important;
+                    border: 2px solid #4a4a4a !important;
+                    border-radius: 12px !important;
+                    padding: 5px 10px !important;
                 }
-                QLabel {
-                    color: #aaaaaa;
+                TagChip[selected="false"]:hover {
+                    background-color: #3d3d3d !important;
+                    border: 2px solid #5a5a5a !important;
+                }
+                TagChip[selected="false"] QLabel {
+                    color: #b8b8b8 !important;
                 }
             """)
+
+        # Forzar actualización del estilo
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def mousePressEvent(self, event):
         """Maneja el clic en el chip"""
@@ -120,8 +136,8 @@ class FlowLayout(QHBoxLayout):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setSpacing(8)
-        self.setContentsMargins(0, 0, 0, 0)
+        self.setSpacing(8)  # Espacio entre tags
+        self.setContentsMargins(6, 6, 6, 6)
 
 
 class ProjectElementTagsSection(QWidget):
@@ -152,8 +168,8 @@ class ProjectElementTagsSection(QWidget):
     def _setup_ui(self):
         """Configura la interfaz del widget"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(12)
+        layout.setContentsMargins(15, 12, 15, 12)  # Reducido de 15,15,15,15
+        layout.setSpacing(8)  # Reducido de 12
 
         # Título con botón crear
         header_layout = QHBoxLayout()
@@ -183,7 +199,8 @@ class ProjectElementTagsSection(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setMaximumHeight(150)
+        scroll_area.setMaximumHeight(120)  # Reducido de 150 para más compacto
+        scroll_area.setMinimumHeight(40)   # Altura mínima
         scroll_area.setStyleSheet("""
             QScrollArea {
                 background-color: transparent;
@@ -191,15 +208,19 @@ class ProjectElementTagsSection(QWidget):
             }
             QScrollBar:vertical {
                 background-color: #2d2d2d;
-                width: 10px;
-                border-radius: 5px;
+                width: 8px;
+                border-radius: 4px;
             }
             QScrollBar::handle:vertical {
                 background-color: #555;
-                border-radius: 5px;
+                border-radius: 4px;
+                min-height: 20px;
             }
             QScrollBar::handle:vertical:hover {
                 background-color: #666;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
             }
         """)
 
@@ -220,7 +241,7 @@ class ProjectElementTagsSection(QWidget):
     def _apply_styles(self):
         """Aplica estilos CSS al widget"""
         self.setStyleSheet("""
-            QPushButton {
+            ProjectElementTagsSection > QPushButton {
                 background-color: #2196F3;
                 color: white;
                 border: none;
@@ -228,13 +249,13 @@ class ProjectElementTagsSection(QWidget):
                 font-weight: bold;
                 font-size: 16px;
             }
-            QPushButton:hover {
+            ProjectElementTagsSection > QPushButton:hover {
                 background-color: #1976D2;
             }
-            QPushButton:pressed {
+            ProjectElementTagsSection > QPushButton:pressed {
                 background-color: #0D47A1;
             }
-            QLabel {
+            ProjectElementTagsSection > QLabel {
                 color: #ffffff;
             }
         """)

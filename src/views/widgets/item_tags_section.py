@@ -47,8 +47,8 @@ class ItemTagsSection(QWidget):
     def _setup_ui(self):
         """Configura la interfaz del widget"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(12)
+        layout.setContentsMargins(15, 12, 15, 12)  # Reducido de 15,15,15,15
+        layout.setSpacing(8)  # Reducido de 12
 
         # Título con botón crear
         header_layout = QHBoxLayout()
@@ -84,11 +84,11 @@ class ItemTagsSection(QWidget):
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Buscar o agregar tag...")
-        self.search_input.setMinimumHeight(35)
+        self.search_input.setMinimumHeight(32)  # Reducido de 35
         search_layout.addWidget(self.search_input)
 
         self.add_btn = QPushButton("Agregar")
-        self.add_btn.setFixedHeight(35)
+        self.add_btn.setFixedHeight(32)  # Reducido de 35
         self.add_btn.setToolTip("Agregar tag desde búsqueda")
         search_layout.addWidget(self.add_btn)
 
@@ -99,7 +99,8 @@ class ItemTagsSection(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setMaximumHeight(150)
+        scroll_area.setMaximumHeight(120)  # Reducido de 150
+        scroll_area.setMinimumHeight(40)   # Altura mínima
         scroll_area.setStyleSheet("""
             QScrollArea {
                 background-color: transparent;
@@ -107,15 +108,19 @@ class ItemTagsSection(QWidget):
             }
             QScrollBar:vertical {
                 background-color: #2d2d2d;
-                width: 10px;
-                border-radius: 5px;
+                width: 8px;
+                border-radius: 4px;
             }
             QScrollBar::handle:vertical {
                 background-color: #555;
-                border-radius: 5px;
+                border-radius: 4px;
+                min-height: 20px;
             }
             QScrollBar::handle:vertical:hover {
                 background-color: #666;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
             }
         """)
 
