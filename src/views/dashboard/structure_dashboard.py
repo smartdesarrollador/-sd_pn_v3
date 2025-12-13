@@ -2592,6 +2592,16 @@ class StructureDashboard(QDialog, TaskbarMinimizableMixin):
                 self.maximize_btn.setToolTip("Restaurar")
                 logger.debug("Dashboard maximized (fallback)")
 
+    def changeEvent(self, event):
+        """Interceptar minimización para usar barra lateral"""
+        if event.type() == event.Type.WindowStateChange:
+            if self.isMinimized():
+                # Minimizar a barra lateral en lugar de taskbar de Windows
+                event.ignore()
+                self.minimize_to_taskbar()
+                return
+        super().changeEvent(event)
+
     def closeEvent(self, event):
         """Handle window close"""
         logger.info("Structure Dashboard closed")

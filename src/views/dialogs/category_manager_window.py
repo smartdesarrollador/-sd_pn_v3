@@ -1185,6 +1185,16 @@ class CategoryManagerWindow(QWidget, TaskbarMinimizableMixin):
                 f"No se pudo actualizar el estado de anclaje: {str(e)}"
             )
 
+    def changeEvent(self, event):
+        """Interceptar minimización para usar barra lateral izquierda"""
+        if event.type() == event.Type.WindowStateChange:
+            if self.isMinimized():
+                # Evitar minimización al taskbar de Windows
+                event.ignore()
+                self.minimize_to_taskbar()
+                return
+        super().changeEvent(event)
+
     def closeEvent(self, event):
         """Handle window close event"""
         self.categories_changed.emit()

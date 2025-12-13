@@ -1534,6 +1534,16 @@ class ProjectsWindow(QMainWindow, TaskbarMinimizableMixin):
             self.resize(400, current_height)
             logger.info("Window width adjusted to mobile: 400px")
 
+    def changeEvent(self, event):
+        """Interceptar minimización para usar barra lateral"""
+        if event.type() == event.Type.WindowStateChange:
+            if self.isMinimized():
+                # Minimizar a barra lateral en lugar de taskbar de Windows
+                event.ignore()
+                self.minimize_to_taskbar()
+                return
+        super().changeEvent(event)
+
     def closeEvent(self, event):
         """Al cerrar la ventana - los paneles flotantes permanecen abiertos independientemente"""
         logger.info("ProjectsWindow closing - all floating panels will remain open")

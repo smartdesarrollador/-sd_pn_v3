@@ -750,6 +750,16 @@ class AdvancedSearchWindow(QWidget, TaskbarMinimizableMixin):
         # Focus on search input
         self.search_panel.focus()
 
+    def changeEvent(self, event):
+        """Interceptar minimización para usar barra lateral"""
+        if event.type() == event.Type.WindowStateChange:
+            if self.isMinimized():
+                # Minimizar a barra lateral en lugar de taskbar de Windows
+                event.ignore()
+                self.minimize_to_taskbar()
+                return
+        super().changeEvent(event)
+
     def closeEvent(self, event):
         """Handle window close event"""
         logger.info("Advanced search window closed")
