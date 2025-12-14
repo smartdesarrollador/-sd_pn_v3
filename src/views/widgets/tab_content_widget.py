@@ -178,9 +178,7 @@ class TabContentWidget(QWidget):
         self.project_tags_section.create_tag_clicked.connect(self.create_project_tag_clicked.emit)
 
         # Items section
-        self.items_section.items_changed.connect(self._on_data_changed)
-        self.items_section.item_content_changed.connect(self._on_item_changed)
-        self.items_section.item_type_changed.connect(self._on_item_changed)
+        self.items_section.data_changed.connect(self._on_data_changed)
 
         # Item tags section
         self.item_tags_section.tags_changed.connect(self._on_data_changed)
@@ -248,12 +246,11 @@ class TabContentWidget(QWidget):
         if is_list:
             self.special_tag_section.clear()
 
+        # Mostrar/ocultar flechas de ordenamiento en items
+        self.items_section.set_create_as_list(is_list)
+
         self._on_data_changed()
         logger.debug(f"Crear como lista: {is_list} - Tag especial {'deshabilitado' if is_list else 'habilitado'}")
-
-    def _on_item_changed(self, index: int, value: str):
-        """Callback cuando cambia un item individual"""
-        self._on_data_changed()
 
     def _on_data_changed(self):
         """Callback cuando cambian los datos (trigger auto-save)"""
@@ -282,9 +279,8 @@ class TabContentWidget(QWidget):
         if draft.project_element_tags:
             self.project_tags_section.set_selected_tags(draft.project_element_tags)
 
-        # Cargar items
-        items_data = [item.to_dict() for item in draft.items]
-        self.items_section.set_items_data(items_data)
+        # Cargar items (ahora son objetos ItemFieldData directamente)
+        self.items_section.set_items_data(draft.items)
 
         # Cargar tag especial (NUEVO)
         if hasattr(draft, 'special_tag') and draft.special_tag:
@@ -317,13 +313,8 @@ class TabContentWidget(QWidget):
             item_tags=self.item_tags_section.get_selected_tags()
         )
 
-        # Agregar items
-        items_data = self.items_section.get_non_empty_items()
-        for item_data in items_data:
-            draft.add_item(
-                content=item_data['content'],
-                item_type=item_data['type']
-            )
+        # Agregar items (ahora son objetos ItemFieldData, no diccionarios)
+        draft.items = self.items_section.get_non_empty_items()
 
         logger.debug(f"Datos obtenidos: {draft.get_items_count()} items válidos")
         return draft

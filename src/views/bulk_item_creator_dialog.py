@@ -887,9 +887,10 @@ class BulkItemCreatorDialog(QWidget):
             try:
                 item_id = self.db.add_item(
                     category_id=draft.category_id,
-                    label=item_field.content,
+                    label=item_field.get_final_label(),
                     content=item_field.content,
                     item_type=item_field.item_type,
+                    is_sensitive=item_field.is_sensitive,
                     tags=draft.item_tags  # Solo tags de items (opcionales)
                 )
 
@@ -945,9 +946,10 @@ class BulkItemCreatorDialog(QWidget):
                 try:
                     item_id = self.db.add_item(
                         category_id=draft.category_id,
-                        label=item_field.content,
+                        label=item_field.get_final_label(),
                         content=item_field.content,
                         item_type=item_field.item_type,
+                        is_sensitive=item_field.is_sensitive,
                         tags=all_tags
                     )
 
@@ -1051,9 +1053,10 @@ class BulkItemCreatorDialog(QWidget):
                 try:
                     item_id = self.db.add_item(
                         category_id=draft.category_id,
-                        label=item_field.content,
+                        label=item_field.get_final_label(),
                         content=item_field.content,
                         item_type=item_field.item_type,
+                        is_sensitive=item_field.is_sensitive,
                         list_id=lista_id,
                         tags=draft.item_tags  # Tags opcionales (sin tag especial)
                     )

@@ -1,11 +1,12 @@
 """
-Widget de sección de campos de items para el Creador Masivo
+Widget de sección de campos de items para el Creador Masivo - VERSIÓN 2.0
 
-Componentes:
-- Contenedor de ItemFieldWidget (sin scroll interno)
-- Botón + para agregar nuevos items
+Características:
+- Dos botones de creación: Item Simple y Item Especial
+- Soporte para ordenamiento de items (flechas arriba/abajo)
 - Gestión dinámica de items (mínimo 1)
 - Validación de todos los items
+- Toggle de flechas con checkbox "Crear como lista"
 
 NOTA: El scroll es manejado por el contenedor padre (TabContentWidget)
 """
@@ -17,6 +18,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 from src.views.widgets.item_field_widget import ItemFieldWidget
+from src.models.item_draft import ItemFieldData
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,32 +26,31 @@ logger = logging.getLogger(__name__)
 
 class ItemFieldsSection(QWidget):
     """
-    Sección de campos de items para el Creador Masivo
+    Sección de campos de items para el Creador Masivo v2.0
 
-    Permite agregar/eliminar múltiples items dinámicamente.
-    Cada item tiene contenido y tipo individual.
+    Permite agregar/eliminar múltiples items dinámicamente con 2 modos:
+    - Items simples (compactos)
+    - Items especiales (con label separado + checkbox sensible)
 
     Señales:
-        items_changed: Emitida cuando cambia la cantidad de items (int)
-        item_content_changed: Emitida cuando cambia el contenido de un item (int, str)
-        item_type_changed: Emitida cuando cambia el tipo de un item (int, str)
+        data_changed: Emitida cuando cambian los datos de items
     """
 
     # Señales
-    items_changed = pyqtSignal(int)  # Cantidad de items
-    item_content_changed = pyqtSignal(int, str)  # index, content
-    item_type_changed = pyqtSignal(int, str)  # index, type
+    data_changed = pyqtSignal()
 
     def __init__(self, parent=None):
         """Inicializa la sección de campos de items"""
         super().__init__(parent)
         self.item_widgets: list[ItemFieldWidget] = []
+        self.create_as_list_enabled = False  # Estado del checkbox "Crear como lista"
+
         self._setup_ui()
         self._apply_styles()
         self._connect_signals()
 
-        # Agregar primer item por defecto
-        self.add_item_field()
+        # Agregar primer item simple por defecto
+        self.add_simple_item()
 
     def _setup_ui(self):
         """Configura la interfaz del widget"""
@@ -57,11 +58,11 @@ class ItemFieldsSection(QWidget):
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(12)
 
-        # Título con contador y botón agregar
+        # Título con contador y botones de creación
         header_layout = QHBoxLayout()
         header_layout.setSpacing(10)
 
-        title = QLabel("📝 Items")
+        title = QLabel("📋 Items")
         title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         header_layout.addWidget(title)
 
@@ -71,10 +72,21 @@ class ItemFieldsSection(QWidget):
 
         header_layout.addStretch()
 
-        self.add_btn = QPushButton("+ Agregar Item")
-        self.add_btn.setFixedHeight(35)
-        self.add_btn.setToolTip("Agregar nuevo campo de item")
-        header_layout.addWidget(self.add_btn)
+        # Botón 1: Item Simple
+        self.add_simple_btn = QPushButton("+ Agregar Item")
+        self.add_simple_btn.setFixedHeight(35)
+        self.add_simple_btn.setMinimumWidth(130)
+        self.add_simple_btn.setToolTip("Agregar item simple (compacto)")
+        self.add_simple_btn.setProperty("simple_button", True)
+        header_layout.addWidget(self.add_simple_btn)
+
+        # Botón 2: Item Especial
+        self.add_special_btn = QPushButton("⚙️ Item Especial")
+        self.add_special_btn.setFixedHeight(35)
+        self.add_special_btn.setMinimumWidth(140)
+        self.add_special_btn.setToolTip("Agregar item especial con label separado y checkbox sensible")
+        self.add_special_btn.setProperty("special_button", True)
+        header_layout.addWidget(self.add_special_btn)
 
         layout.addLayout(header_layout)
 
@@ -84,7 +96,7 @@ class ItemFieldsSection(QWidget):
         separator.setStyleSheet("background-color: #444;")
         layout.addWidget(separator)
 
-        # Layout directo para items (sin scroll)
+        # Layout directo para items (sin scroll - manejado por padre)
         self.items_layout = QVBoxLayout()
         self.items_layout.setContentsMargins(0, 0, 0, 0)
         self.items_layout.setSpacing(10)
@@ -93,20 +105,35 @@ class ItemFieldsSection(QWidget):
     def _apply_styles(self):
         """Aplica estilos CSS al widget"""
         self.setStyleSheet("""
-            QPushButton {
+            QPushButton[simple_button="true"] {
                 background-color: #2196F3;
                 color: white;
                 border: none;
                 border-radius: 5px;
                 font-weight: bold;
-                font-size: 13px;
+                font-size: 12px;
                 padding: 8px 16px;
             }
-            QPushButton:hover {
+            QPushButton[simple_button="true"]:hover {
                 background-color: #1976D2;
             }
-            QPushButton:pressed {
+            QPushButton[simple_button="true"]:pressed {
                 background-color: #0D47A1;
+            }
+            QPushButton[special_button="true"] {
+                background-color: #ff9800;
+                color: #000;
+                border: none;
+                border-radius: 5px;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 8px 16px;
+            }
+            QPushButton[special_button="true"]:hover {
+                background-color: #ffb74d;
+            }
+            QPushButton[special_button="true"]:pressed {
+                background-color: #f57c00;
             }
             QLabel {
                 color: #ffffff;
@@ -115,46 +142,84 @@ class ItemFieldsSection(QWidget):
 
     def _connect_signals(self):
         """Conecta señales internas"""
-        self.add_btn.clicked.connect(lambda: self.add_item_field())
+        self.add_simple_btn.clicked.connect(lambda: self.add_simple_item())
+        self.add_special_btn.clicked.connect(lambda: self.add_special_item())
 
-    def add_item_field(self, content: str = '', item_type: str = 'TEXT'):
+    # === AGREGAR ITEMS ===
+
+    def add_simple_item(self, content="", item_type="TEXT"):
         """
-        Agrega un nuevo campo de item
+        Agrega un item en modo SIMPLE (compacto)
 
         Args:
             content: Contenido inicial
             item_type: Tipo inicial (TEXT, CODE, URL, PATH)
         """
-        # Crear widget de item
-        item_widget = ItemFieldWidget(content, item_type, auto_detect=True)
+        item_widget = ItemFieldWidget(
+            item_type="simple",
+            content=content,
+            item_data_type=item_type,
+            auto_detect=True,
+            parent=self
+        )
+        self._add_item_widget(item_widget)
+        logger.debug("Item simple agregado")
 
-        # Conectar señales
-        index = len(self.item_widgets)
-        item_widget.content_changed.connect(
-            lambda text, idx=index: self.item_content_changed.emit(idx, text)
-        )
-        item_widget.type_changed.connect(
-            lambda typ, idx=index: self.item_type_changed.emit(idx, typ)
-        )
-        item_widget.remove_requested.connect(
-            lambda widget=item_widget: self.remove_item_field(widget)
-        )
+    def add_special_item(self, content="", label="", item_data_type="TEXT", is_sensitive=False):
+        """
+        Agrega un item en modo ESPECIAL (expandido)
 
-        # Agregar a lista y layout
-        self.item_widgets.append(item_widget)
-        self.items_layout.addWidget(item_widget)
+        Args:
+            content: Contenido inicial
+            label: Label inicial
+            item_data_type: Tipo inicial
+            is_sensitive: Si es sensible
+        """
+        item_widget = ItemFieldWidget(
+            item_type="especial",
+            content=content,
+            label=label,
+            item_data_type=item_data_type,
+            is_sensitive=is_sensitive,
+            auto_detect=True,
+            parent=self
+        )
+        self._add_item_widget(item_widget)
+        logger.debug("Item especial agregado")
+
+    def _add_item_widget(self, widget: ItemFieldWidget):
+        """
+        Agrega un widget de item a la sección
+
+        Args:
+            widget: ItemFieldWidget a agregar
+        """
+        # Conectar señales del widget
+        widget.data_changed.connect(self.data_changed.emit)
+        widget.delete_requested.connect(self.remove_item)
+        widget.move_up_requested.connect(self.move_item_up)
+        widget.move_down_requested.connect(self.move_item_down)
+
+        # Aplicar estado de ordenamiento actual
+        widget.set_ordering_visible(self.create_as_list_enabled)
+
+        # Agregar a layout y lista
+        self.items_layout.addWidget(widget)
+        self.item_widgets.append(widget)
 
         # Actualizar contador
         self._update_count()
 
         # Focus en el nuevo campo
-        item_widget.focus_content()
+        widget.focus_content()
 
-        logger.debug(f"Campo de item agregado (total: {len(self.item_widgets)})")
+        self.data_changed.emit()
 
-    def remove_item_field(self, widget: ItemFieldWidget):
+    # === ELIMINAR ITEMS ===
+
+    def remove_item(self, widget: ItemFieldWidget):
         """
-        Elimina un campo de item
+        Elimina un item
 
         Args:
             widget: Widget a eliminar
@@ -173,13 +238,92 @@ class ItemFieldsSection(QWidget):
             # Actualizar contador
             self._update_count()
 
-            logger.debug(f"Campo de item eliminado (total: {len(self.item_widgets)})")
+            logger.debug(f"Item eliminado (total: {len(self.item_widgets)})")
+            self.data_changed.emit()
+
+    # === ORDENAMIENTO ===
+
+    def move_item_up(self, widget: ItemFieldWidget):
+        """
+        Mueve un item hacia arriba en la lista
+
+        Args:
+            widget: Widget a mover
+        """
+        try:
+            index = self.item_widgets.index(widget)
+        except ValueError:
+            logger.error("Widget no encontrado en la lista")
+            return
+
+        if index > 0:
+            # Swap en lista
+            self.item_widgets[index], self.item_widgets[index - 1] = \
+                self.item_widgets[index - 1], self.item_widgets[index]
+
+            # Reconstruir layout
+            self._rebuild_layout()
+
+            logger.debug(f"Item movido arriba: {index} -> {index - 1}")
+            self.data_changed.emit()
+
+    def move_item_down(self, widget: ItemFieldWidget):
+        """
+        Mueve un item hacia abajo en la lista
+
+        Args:
+            widget: Widget a mover
+        """
+        try:
+            index = self.item_widgets.index(widget)
+        except ValueError:
+            logger.error("Widget no encontrado en la lista")
+            return
+
+        if index < len(self.item_widgets) - 1:
+            # Swap en lista
+            self.item_widgets[index], self.item_widgets[index + 1] = \
+                self.item_widgets[index + 1], self.item_widgets[index]
+
+            # Reconstruir layout
+            self._rebuild_layout()
+
+            logger.debug(f"Item movido abajo: {index} -> {index + 1}")
+            self.data_changed.emit()
+
+    def _rebuild_layout(self):
+        """Reconstruye el layout después de reordenar items"""
+        # Remover todos los widgets del layout
+        while self.items_layout.count() > 0:
+            self.items_layout.takeAt(0)
+
+        # Agregar en nuevo orden
+        for widget in self.item_widgets:
+            self.items_layout.addWidget(widget)
+
+    # === TOGGLE DE ORDENAMIENTO ===
+
+    def set_create_as_list(self, enabled: bool):
+        """
+        Callback cuando cambia el checkbox "Crear como lista"
+        Muestra/oculta las flechas de ordenamiento en todos los items
+
+        Args:
+            enabled: True si está marcado "Crear como lista"
+        """
+        self.create_as_list_enabled = enabled
+
+        for widget in self.item_widgets:
+            widget.set_ordering_visible(enabled)
+
+        logger.debug(f"Flechas de ordenamiento {'visibles' if enabled else 'ocultas'}")
+
+    # === CONTADOR ===
 
     def _update_count(self):
         """Actualiza el contador de items"""
         count = self.get_items_count()
         self.count_label.setText(f"({count})")
-        self.items_changed.emit(count)
 
     def get_items_count(self) -> int:
         """
@@ -199,36 +343,38 @@ class ItemFieldsSection(QWidget):
         """
         return len(self.item_widgets)
 
-    def get_items_data(self) -> list[dict]:
+    # === OBTENER/ESTABLECER DATOS ===
+
+    def get_items_data(self) -> list[ItemFieldData]:
         """
         Obtiene los datos de todos los items
 
         Returns:
-            Lista de dicts con content y type
+            Lista de ItemFieldData
         """
-        return [widget.to_dict() for widget in self.item_widgets]
+        return [widget.get_data() for widget in self.item_widgets]
 
-    def get_non_empty_items(self) -> list[dict]:
+    def get_non_empty_items(self) -> list[ItemFieldData]:
         """
         Obtiene solo los items con contenido
 
         Returns:
-            Lista de dicts con content y type (solo no vacíos)
+            Lista de ItemFieldData (solo no vacíos)
         """
         return [
-            widget.to_dict()
+            widget.get_data()
             for widget in self.item_widgets
             if not widget.is_empty()
         ]
 
-    def set_items_data(self, items_data: list[dict]):
+    def set_items_data(self, items_data: list[ItemFieldData]):
         """
         Establece los items desde datos
 
         Args:
-            items_data: Lista de dicts con content y type
+            items_data: Lista de ItemFieldData
         """
-        # Limpiar items existentes manualmente
+        # Limpiar items existentes
         for widget in self.item_widgets[:]:
             self.items_layout.removeWidget(widget)
             widget.deleteLater()
@@ -237,14 +383,26 @@ class ItemFieldsSection(QWidget):
 
         # Agregar items desde datos
         if not items_data:
-            # Agregar al menos 1 item vacío
-            self.add_item_field()
+            # Agregar al menos 1 item simple vacío
+            self.add_simple_item()
         else:
             for item_data in items_data:
-                self.add_item_field(
-                    content=item_data.get('content', ''),
-                    item_type=item_data.get('type', 'TEXT')
-                )
+                if item_data.is_special_mode:
+                    # Crear item especial
+                    self.add_special_item(
+                        content=item_data.content,
+                        label=item_data.label,
+                        item_data_type=item_data.item_type,
+                        is_sensitive=item_data.is_sensitive
+                    )
+                else:
+                    # Crear item simple
+                    self.add_simple_item(
+                        content=item_data.content,
+                        item_type=item_data.item_type
+                    )
+
+    # === LIMPIEZA ===
 
     def clear_all_items(self):
         """Limpia todos los items (deja solo 1 vacío)"""
@@ -255,10 +413,12 @@ class ItemFieldsSection(QWidget):
 
         self.item_widgets.clear()
 
-        # Agregar 1 item vacío
-        self.add_item_field()
+        # Agregar 1 item simple vacío
+        self.add_simple_item()
 
         logger.debug("Todos los items limpiados")
+
+    # === VALIDACIÓN ===
 
     def validate_all(self) -> tuple[bool, list[tuple[int, str]]]:
         """
@@ -276,9 +436,6 @@ class ItemFieldsSection(QWidget):
             is_valid, error_msg = widget.validate()
             if not is_valid:
                 errors.append((index, error_msg))
-                widget.set_error_state(True, error_msg)
-            else:
-                widget.set_error_state(False)
 
         all_valid = len(errors) == 0
 
@@ -289,10 +446,7 @@ class ItemFieldsSection(QWidget):
 
         return all_valid, errors
 
-    def clear_validation_errors(self):
-        """Limpia los estados de error de validación"""
-        for widget in self.item_widgets:
-            widget.set_error_state(False)
+    # === FOCO ===
 
     def focus_first_item(self):
         """Pone foco en el primer campo de item"""
@@ -309,35 +463,26 @@ class ItemFieldsSection(QWidget):
         if 0 <= index < len(self.item_widgets):
             self.item_widgets[index].focus_content()
 
-    def set_auto_detect(self, enabled: bool):
-        """
-        Habilita/deshabilita auto-detección de tipo en todos los items
-
-        Args:
-            enabled: True para habilitar
-        """
-        for widget in self.item_widgets:
-            widget.set_auto_detect(enabled)
-
-        logger.debug(f"Auto-detección {'habilitada' if enabled else 'deshabilitada'} en todos los items")
+    # === CONVERSIÓN ===
 
     def to_list(self) -> list[dict]:
         """
         Exporta a lista de diccionarios
 
         Returns:
-            Lista de items con content y type
+            Lista de items con todos los campos
         """
-        return self.get_non_empty_items()
+        return [item.to_dict() for item in self.get_non_empty_items()]
 
     def from_list(self, items_data: list[dict]):
         """
         Importa desde lista de diccionarios
 
         Args:
-            items_data: Lista de items con content y type
+            items_data: Lista de items con campos
         """
-        self.set_items_data(items_data)
+        items = [ItemFieldData.from_dict(data) for data in items_data]
+        self.set_items_data(items)
 
     def __repr__(self) -> str:
         """Representación del widget"""

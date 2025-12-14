@@ -1,19 +1,23 @@
 """
-Widget para campo individual de item en el Creador Masivo
+Widget para campo individual de item en el Creador Masivo - VERSIÓN 2.0
+
+Soporta 2 modos:
+- SIMPLE: Campo compacto (label = content automático)
+- ESPECIAL: Formulario expandido con label separado + checkbox sensible
 
 Componentes:
-- Campo de texto para contenido
-- ComboBox para tipo (TEXT, CODE, URL, PATH)
-- Botón de eliminar
-- Auto-detección de tipo opcional
+- Modo Simple: [icon] [content] [type] [↑] [↓] [×]
+- Modo Especial: Formulario vertical con label, content, type, sensitive checkbox
 """
 
 from PyQt6.QtWidgets import (
-    QWidget, QHBoxLayout, QLineEdit, QComboBox, QPushButton, QLabel
+    QWidget, QHBoxLayout, QVBoxLayout, QLineEdit, QComboBox,
+    QPushButton, QLabel, QCheckBox, QFrame
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 from src.core.item_validation_service import ItemValidationService
+from src.models.item_draft import ItemFieldData
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,310 +25,553 @@ logger = logging.getLogger(__name__)
 
 class ItemFieldWidget(QWidget):
     """
-    Widget para un campo individual de item
+    Widget para un campo individual de item con soporte para 2 modos
+
+    Modos:
+    - simple: Modo compacto (label = content automático)
+    - especial: Modo expandido (label + content separados, checkbox sensible)
 
     Señales:
-        content_changed: Emitida cuando cambia el contenido (str)
-        type_changed: Emitida cuando cambia el tipo (str)
-        remove_requested: Emitida cuando se solicita eliminar
+        data_changed: Emitida cuando cambian los datos
+        delete_requested: Emitida cuando se solicita eliminar (self)
+        move_up_requested: Emitida cuando se solicita mover arriba (self)
+        move_down_requested: Emitida cuando se solicita mover abajo (self)
     """
 
     # Señales
-    content_changed = pyqtSignal(str)  # nuevo contenido
-    type_changed = pyqtSignal(str)  # nuevo tipo
-    remove_requested = pyqtSignal()  # solicitud de eliminación
+    data_changed = pyqtSignal()
+    delete_requested = pyqtSignal(object)  # self
+    move_up_requested = pyqtSignal(object)  # self
+    move_down_requested = pyqtSignal(object)  # self
 
     # Tipos de items disponibles
     ITEM_TYPES = ['TEXT', 'CODE', 'URL', 'PATH']
 
-    def __init__(self, content: str = '', item_type: str = 'TEXT',
-                 auto_detect: bool = True, parent=None):
+    def __init__(self, item_type="simple", content="", label="",
+                 item_data_type="TEXT", is_sensitive=False,
+                 auto_detect=True, parent=None):
         """
         Inicializa el widget de campo de item
 
         Args:
+            item_type: "simple" o "especial"
             content: Contenido inicial
-            item_type: Tipo inicial (TEXT, CODE, URL, PATH)
+            label: Label inicial (solo modo especial)
+            item_data_type: Tipo de dato (TEXT, CODE, URL, PATH)
+            is_sensitive: Si es dato sensible (solo modo especial)
             auto_detect: Habilitar auto-detección de tipo
             parent: Widget padre
         """
         super().__init__(parent)
+        self.item_mode = item_type  # "simple" o "especial"
         self.auto_detect_enabled = auto_detect
+
+        # Widgets que varían según el modo
+        self.label_input = None  # Solo en modo especial
+        self.sensitive_checkbox = None  # Solo en modo especial
+
+        # Widgets comunes
+        self.content_input = None
+        self.type_combo = None
+        self.up_btn = None
+        self.down_btn = None
+        self.delete_btn = None
+        self.type_indicator = None
+
         self._setup_ui()
         self._apply_styles()
+
+        # Establecer valores iniciales
         self.set_content(content)
-        self.set_type(item_type)
+        if self.label_input:
+            self.set_label(label)
+        self.set_data_type(item_data_type)
+        if self.sensitive_checkbox:
+            self.set_sensitive(is_sensitive)
+
         self._connect_signals()
 
-    def _setup_ui(self):
-        """Configura la interfaz del widget"""
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 5, 0, 5)
-        layout.setSpacing(10)
+        logger.debug(f"ItemFieldWidget creado en modo '{item_type}'")
 
-        # Campo de texto para contenido
-        self.content_input = QLineEdit()
-        self.content_input.setPlaceholderText("Ingrese el contenido del item...")
-        self.content_input.setMinimumHeight(40)
+    def _setup_ui(self):
+        """Configura la interfaz según el modo"""
+        if self.item_mode == "simple":
+            self._setup_simple_mode()
+        else:
+            self._setup_special_mode()
+
+    def _setup_simple_mode(self):
+        """
+        Configura layout para modo SIMPLE (compacto)
+
+        Layout: [icon] [content_input (stretch)] [type_combo] [↑] [↓] [×]
+        """
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(8)
 
         # Indicador de tipo (emoji)
-        self.type_indicator = QLabel()
-        self.type_indicator.setFixedWidth(30)
+        self.type_indicator = QLabel("📄")
+        self.type_indicator.setFixedWidth(25)
         self.type_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         font = QFont()
-        font.setPointSize(16)
+        font.setPointSize(14)
         self.type_indicator.setFont(font)
+        layout.addWidget(self.type_indicator)
 
-        # ComboBox de tipo
+        # Content input
+        self.content_input = QLineEdit()
+        self.content_input.setPlaceholderText("Ingrese el contenido del item...")
+        self.content_input.setMinimumHeight(35)
+        layout.addWidget(self.content_input, 1)  # Stretch
+
+        # Type combo
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(self.ITEM_TYPES)
+        self.type_combo.setFixedWidth(90)
+        self.type_combo.setMinimumHeight(35)
+        layout.addWidget(self.type_combo)
+
+        # Botones de ordenamiento (inicialmente ocultos)
+        self.up_btn = QPushButton("🔺")
+        self.up_btn.setFixedSize(30, 30)
+        self.up_btn.setToolTip("Mover arriba")
+        self.up_btn.setVisible(False)
+        self.up_btn.setProperty("ordering_button", True)
+        layout.addWidget(self.up_btn)
+
+        self.down_btn = QPushButton("🔻")
+        self.down_btn.setFixedSize(30, 30)
+        self.down_btn.setToolTip("Mover abajo")
+        self.down_btn.setVisible(False)
+        self.down_btn.setProperty("ordering_button", True)
+        layout.addWidget(self.down_btn)
+
+        # Botón eliminar
+        self.delete_btn = QPushButton("❌")
+        self.delete_btn.setFixedSize(30, 30)
+        self.delete_btn.setToolTip("Eliminar item")
+        layout.addWidget(self.delete_btn)
+
+    def _setup_special_mode(self):
+        """
+        Configura layout para modo ESPECIAL (expandido)
+
+        Layout vertical con:
+        - Header "⚙️ Item Especial"
+        - Label input
+        - Content input
+        - Type combo
+        - Sensitive checkbox + botones de control
+        """
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(10)
+
+        # Header
+        header_layout = QHBoxLayout()
+        header_icon = QLabel("⚙️")
+        header_icon.setStyleSheet("font-size: 14pt;")
+        header_layout.addWidget(header_icon)
+
+        header_title = QLabel("Item Especial")
+        header_title.setStyleSheet("font-weight: bold; color: #ff9800; font-size: 11pt;")
+        header_layout.addWidget(header_title)
+        header_layout.addStretch()
+        main_layout.addLayout(header_layout)
+
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setStyleSheet("background-color: #ff9800; max-height: 2px;")
+        main_layout.addWidget(separator)
+
+        # Label field
+        label_label = QLabel("Label:")
+        label_label.setStyleSheet("font-weight: bold; color: #ccc;")
+        main_layout.addWidget(label_label)
+
+        self.label_input = QLineEdit()
+        self.label_input.setPlaceholderText("Nombre o título del item")
+        self.label_input.setMinimumHeight(35)
+        main_layout.addWidget(self.label_input)
+
+        # Content field
+        content_label = QLabel("Content:")
+        content_label.setStyleSheet("font-weight: bold; color: #ccc;")
+        main_layout.addWidget(content_label)
+
+        self.content_input = QLineEdit()
+        self.content_input.setPlaceholderText("Contenido o comando")
+        self.content_input.setMinimumHeight(35)
+        main_layout.addWidget(self.content_input)
+
+        # Type combo
+        type_layout = QHBoxLayout()
+        type_label = QLabel("Tipo:")
+        type_label.setStyleSheet("font-weight: bold; color: #ccc;")
+        type_layout.addWidget(type_label)
+
         self.type_combo = QComboBox()
         self.type_combo.addItems(self.ITEM_TYPES)
         self.type_combo.setFixedWidth(100)
-        self.type_combo.setMinimumHeight(40)
+        self.type_combo.setMinimumHeight(35)
+        type_layout.addWidget(self.type_combo)
+        type_layout.addStretch()
+
+        main_layout.addLayout(type_layout)
+
+        # Bottom row: Sensitive checkbox + control buttons
+        bottom_layout = QHBoxLayout()
+
+        self.sensitive_checkbox = QCheckBox("🔒 Dato sensible (is_sensitive)")
+        self.sensitive_checkbox.setStyleSheet("color: #ffeb3b; font-weight: bold;")
+        self.sensitive_checkbox.setToolTip("Marca si este item contiene información sensible que debe cifrarse")
+        bottom_layout.addWidget(self.sensitive_checkbox)
+
+        bottom_layout.addStretch()
+
+        # Botones de ordenamiento (inicialmente ocultos)
+        self.up_btn = QPushButton("🔺")
+        self.up_btn.setFixedSize(30, 30)
+        self.up_btn.setToolTip("Mover arriba")
+        self.up_btn.setVisible(False)
+        self.up_btn.setProperty("ordering_button", True)
+        bottom_layout.addWidget(self.up_btn)
+
+        self.down_btn = QPushButton("🔻")
+        self.down_btn.setFixedSize(30, 30)
+        self.down_btn.setToolTip("Mover abajo")
+        self.down_btn.setVisible(False)
+        self.down_btn.setProperty("ordering_button", True)
+        bottom_layout.addWidget(self.down_btn)
 
         # Botón eliminar
-        self.remove_btn = QPushButton("✖")
-        self.remove_btn.setFixedSize(35, 35)
-        self.remove_btn.setToolTip("Eliminar item")
+        self.delete_btn = QPushButton("❌")
+        self.delete_btn.setFixedSize(30, 30)
+        self.delete_btn.setToolTip("Eliminar item")
+        bottom_layout.addWidget(self.delete_btn)
 
-        # Agregar a layout
-        layout.addWidget(self.type_indicator)
-        layout.addWidget(self.content_input, 1)  # Stretch factor 1
-        layout.addWidget(self.type_combo)
-        layout.addWidget(self.remove_btn)
+        main_layout.addLayout(bottom_layout)
 
     def _apply_styles(self):
-        """Aplica estilos CSS al widget"""
-        self.setStyleSheet("""
-            QLineEdit {
-                background-color: #2d2d2d;
-                color: #ffffff;
-                border: 1px solid #444;
-                border-radius: 5px;
-                padding: 8px 12px;
-                font-size: 13px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2196F3;
-                background-color: #353535;
-            }
-            QLineEdit::placeholder {
-                color: #888;
-            }
-            QComboBox {
-                background-color: #3d3d3d;
-                color: #ffffff;
-                border: 1px solid #444;
-                border-radius: 5px;
-                padding: 8px;
-                font-size: 12px;
-            }
-            QComboBox:hover {
-                background-color: #4d4d4d;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 6px solid #888;
-                width: 0;
-                height: 0;
-            }
-            QPushButton {
-                background-color: #d32f2f;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #b71c1c;
-            }
-            QPushButton:pressed {
-                background-color: #8b0000;
-            }
-        """)
+        """Aplica estilos CSS según el modo"""
+        if self.item_mode == "simple":
+            self.setStyleSheet("""
+                ItemFieldWidget {
+                    background-color: #2d2d2d;
+                    border: 1px solid #3d3d3d;
+                    border-radius: 5px;
+                    padding: 2px;
+                }
+                ItemFieldWidget:hover {
+                    border-color: #2196F3;
+                }
+                QLineEdit {
+                    background-color: #252525;
+                    color: #ffffff;
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #2196F3;
+                    background-color: #303030;
+                }
+                QLineEdit::placeholder {
+                    color: #888;
+                }
+                QComboBox {
+                    background-color: #3d3d3d;
+                    color: #ffffff;
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-size: 11px;
+                }
+                QComboBox:hover {
+                    background-color: #4d4d4d;
+                }
+                QPushButton[ordering_button="true"] {
+                    background-color: #555;
+                    color: #fff;
+                    border: 1px solid #666;
+                    border-radius: 4px;
+                    font-size: 12px;
+                }
+                QPushButton[ordering_button="true"]:hover {
+                    background-color: #2196F3;
+                    border-color: #2196F3;
+                }
+                QPushButton:not([ordering_button="true"]) {
+                    background-color: #d32f2f;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QPushButton:not([ordering_button="true"]):hover {
+                    background-color: #b71c1c;
+                }
+            """)
+        else:  # especial
+            self.setStyleSheet("""
+                ItemFieldWidget {
+                    background-color: #2a2a2a;
+                    border: 2px solid #ff9800;
+                    border-radius: 8px;
+                    padding: 5px;
+                }
+                ItemFieldWidget:hover {
+                    border-color: #ffb74d;
+                    background-color: #2d2d2d;
+                }
+                QLineEdit {
+                    background-color: #252525;
+                    color: #ffffff;
+                    border: 1px solid #555;
+                    border-radius: 4px;
+                    padding: 8px 12px;
+                    font-size: 12px;
+                }
+                QLineEdit:focus {
+                    border: 2px solid #ff9800;
+                    background-color: #303030;
+                }
+                QLineEdit::placeholder {
+                    color: #888;
+                }
+                QComboBox {
+                    background-color: #3d3d3d;
+                    color: #ffffff;
+                    border: 1px solid #555;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-size: 11px;
+                }
+                QComboBox:hover {
+                    background-color: #4d4d4d;
+                }
+                QCheckBox {
+                    color: #ffeb3b;
+                    spacing: 6px;
+                }
+                QCheckBox::indicator {
+                    width: 18px;
+                    height: 18px;
+                    border: 2px solid #666;
+                    border-radius: 3px;
+                    background-color: #2d2d2d;
+                }
+                QCheckBox::indicator:hover {
+                    border-color: #ffeb3b;
+                }
+                QCheckBox::indicator:checked {
+                    background-color: #ffeb3b;
+                    border-color: #ffeb3b;
+                    image: none;
+                }
+                QPushButton[ordering_button="true"] {
+                    background-color: #555;
+                    color: #fff;
+                    border: 1px solid #666;
+                    border-radius: 4px;
+                    font-size: 12px;
+                }
+                QPushButton[ordering_button="true"]:hover {
+                    background-color: #ff9800;
+                    border-color: #ff9800;
+                }
+                QPushButton:not([ordering_button="true"]) {
+                    background-color: #d32f2f;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QPushButton:not([ordering_button="true"]):hover {
+                    background-color: #b71c1c;
+                }
+            """)
 
     def _connect_signals(self):
         """Conecta señales internas"""
+        # Señales de cambio de datos
         self.content_input.textChanged.connect(self._on_content_changed)
         self.type_combo.currentTextChanged.connect(self._on_type_changed)
-        self.remove_btn.clicked.connect(self.remove_requested.emit)
+
+        if self.label_input:
+            self.label_input.textChanged.connect(self.data_changed.emit)
+
+        if self.sensitive_checkbox:
+            self.sensitive_checkbox.stateChanged.connect(self.data_changed.emit)
+
+        # Señales de botones
+        self.delete_btn.clicked.connect(lambda: self.delete_requested.emit(self))
+        self.up_btn.clicked.connect(lambda: self.move_up_requested.emit(self))
+        self.down_btn.clicked.connect(lambda: self.move_down_requested.emit(self))
 
     def _on_content_changed(self, text: str):
         """Callback cuando cambia el contenido"""
-        # Auto-detectar tipo si está habilitado y el campo no está vacío
-        if self.auto_detect_enabled and text.strip():
+        # Auto-detectar tipo si está habilitado
+        if self.auto_detect_enabled and text.strip() and self.item_mode == "simple":
             detected_type = ItemValidationService.auto_detect_type(text)
-            if detected_type != self.get_type():
-                # Actualizar tipo sin emitir señal para evitar loops
+            if detected_type != self.get_data_type():
                 self.type_combo.blockSignals(True)
-                self.set_type(detected_type)
+                self.set_data_type(detected_type)
                 self.type_combo.blockSignals(False)
-                logger.debug(f"Auto-detectado tipo {detected_type} para: {text[:30]}...")
+                logger.debug(f"Auto-detectado tipo {detected_type}")
 
-        # Emitir señal de cambio
-        self.content_changed.emit(text)
+        self.data_changed.emit()
 
     def _on_type_changed(self, item_type: str):
         """Callback cuando cambia el tipo"""
-        # Actualizar indicador visual
-        self._update_type_indicator(item_type)
+        if self.type_indicator:
+            icon = ItemValidationService.get_type_icon(item_type)
+            self.type_indicator.setText(icon)
+            tooltip = ItemValidationService.get_type_description(item_type)
+            self.type_indicator.setToolTip(tooltip)
 
-        # Emitir señal
-        self.type_changed.emit(item_type)
+        self.data_changed.emit()
 
-    def _update_type_indicator(self, item_type: str):
-        """Actualiza el emoji indicador de tipo"""
-        icon = ItemValidationService.get_type_icon(item_type)
-        self.type_indicator.setText(icon)
-        tooltip = ItemValidationService.get_type_description(item_type)
-        self.type_indicator.setToolTip(tooltip)
+    # === GETTERS Y SETTERS ===
 
     def get_content(self) -> str:
-        """
-        Obtiene el contenido actual
-
-        Returns:
-            Contenido del campo
-        """
+        """Obtiene el contenido"""
         return self.content_input.text().strip()
 
     def set_content(self, content: str):
-        """
-        Establece el contenido
-
-        Args:
-            content: Nuevo contenido
-        """
+        """Establece el contenido"""
         self.content_input.setText(content)
 
-    def get_type(self) -> str:
-        """
-        Obtiene el tipo actual
+    def get_label(self) -> str:
+        """Obtiene el label (solo modo especial)"""
+        if self.label_input:
+            return self.label_input.text().strip()
+        return ""
 
-        Returns:
-            Tipo de item (TEXT, CODE, URL, PATH)
-        """
+    def set_label(self, label: str):
+        """Establece el label (solo modo especial)"""
+        if self.label_input:
+            self.label_input.setText(label)
+
+    def get_data_type(self) -> str:
+        """Obtiene el tipo de dato"""
         return self.type_combo.currentText()
 
-    def set_type(self, item_type: str):
-        """
-        Establece el tipo
-
-        Args:
-            item_type: Nuevo tipo
-        """
+    def set_data_type(self, item_type: str):
+        """Establece el tipo de dato"""
         if item_type in self.ITEM_TYPES:
             self.type_combo.setCurrentText(item_type)
-            self._update_type_indicator(item_type)
         else:
             logger.warning(f"Tipo inválido: {item_type}, usando TEXT")
             self.type_combo.setCurrentText('TEXT')
 
-    def to_dict(self) -> dict:
+    def get_sensitive(self) -> bool:
+        """Obtiene el estado de dato sensible (solo modo especial)"""
+        if self.sensitive_checkbox:
+            return self.sensitive_checkbox.isChecked()
+        return False
+
+    def set_sensitive(self, is_sensitive: bool):
+        """Establece el estado de dato sensible (solo modo especial)"""
+        if self.sensitive_checkbox:
+            self.sensitive_checkbox.setChecked(is_sensitive)
+
+    def set_ordering_visible(self, visible: bool):
+        """Muestra/oculta botones de ordenamiento"""
+        self.up_btn.setVisible(visible)
+        self.down_btn.setVisible(visible)
+
+    # === CONVERSIÓN DE DATOS ===
+
+    def get_data(self) -> ItemFieldData:
         """
-        Exporta a diccionario
+        Obtiene los datos del widget como ItemFieldData
 
         Returns:
-            Dict con content y type
+            ItemFieldData con todos los campos
         """
-        return {
-            'content': self.get_content(),
-            'type': self.get_type()
-        }
+        return ItemFieldData(
+            content=self.get_content(),
+            item_type=self.get_data_type(),
+            label=self.get_label() if self.item_mode == "especial" else "",
+            is_sensitive=self.get_sensitive() if self.item_mode == "especial" else False,
+            is_special_mode=(self.item_mode == "especial")
+        )
 
-    def from_dict(self, data: dict):
+    def set_data(self, data: ItemFieldData):
         """
-        Importa desde diccionario
+        Establece los datos desde ItemFieldData
 
         Args:
-            data: Dict con content y type
+            data: ItemFieldData con los datos
         """
-        self.set_content(data.get('content', ''))
-        self.set_type(data.get('type', 'TEXT'))
+        self.set_content(data.content)
+        self.set_data_type(data.item_type)
+
+        if self.item_mode == "especial":
+            if self.label_input:
+                self.set_label(data.label)
+            if self.sensitive_checkbox:
+                self.set_sensitive(data.is_sensitive)
+
+    def to_dict(self) -> dict:
+        """Exporta a diccionario"""
+        return self.get_data().to_dict()
+
+    def from_dict(self, data: dict):
+        """Importa desde diccionario"""
+        item_data = ItemFieldData.from_dict(data)
+        self.set_data(item_data)
+
+    # === VALIDACIÓN ===
 
     def is_empty(self) -> bool:
-        """
-        Verifica si el campo está vacío
-
-        Returns:
-            True si no tiene contenido
-        """
+        """Verifica si el campo está vacío"""
         return not self.get_content()
 
     def validate(self) -> tuple[bool, str]:
         """
-        Valida el contenido según el tipo
+        Valida el contenido
 
         Returns:
             Tupla (is_valid, error_message)
         """
         content = self.get_content()
-        item_type = self.get_type()
 
         if not content:
             return False, "El campo está vacío"
 
+        # En modo especial, validar que label no esté vacío
+        if self.item_mode == "especial":
+            label = self.get_label()
+            if not label:
+                return False, "El label no puede estar vacío en items especiales"
+
+        # Validar contenido según tipo
+        item_type = self.get_data_type()
         return ItemValidationService.validate_item(content, item_type)
 
-    def set_auto_detect(self, enabled: bool):
-        """
-        Habilita/deshabilita auto-detección de tipo
-
-        Args:
-            enabled: True para habilitar
-        """
-        self.auto_detect_enabled = enabled
-        logger.debug(f"Auto-detección {'habilitada' if enabled else 'deshabilitada'}")
+    # === UTILIDADES ===
 
     def focus_content(self):
         """Pone foco en el campo de contenido"""
         self.content_input.setFocus()
 
     def clear(self):
-        """Limpia el contenido del campo"""
+        """Limpia todos los campos"""
         self.content_input.clear()
-
-    def set_placeholder(self, text: str):
-        """
-        Establece el texto del placeholder
-
-        Args:
-            text: Texto del placeholder
-        """
-        self.content_input.setPlaceholderText(text)
-
-    def set_error_state(self, error: bool, message: str = ""):
-        """
-        Establece estado de error visual
-
-        Args:
-            error: True para mostrar error
-            message: Mensaje de error (tooltip)
-        """
-        if error:
-            self.content_input.setStyleSheet("""
-                QLineEdit {
-                    background-color: #2d2d2d;
-                    color: #ffffff;
-                    border: 2px solid #d32f2f;
-                    border-radius: 5px;
-                    padding: 8px 12px;
-                    font-size: 13px;
-                }
-            """)
-            if message:
-                self.content_input.setToolTip(f"❌ {message}")
-        else:
-            # Resetear a estilo normal
-            self._apply_styles()
-            self.content_input.setToolTip("")
+        if self.label_input:
+            self.label_input.clear()
+        if self.sensitive_checkbox:
+            self.sensitive_checkbox.setChecked(False)
 
     def __repr__(self) -> str:
         """Representación del widget"""
+        mode_text = "SPECIAL" if self.item_mode == "especial" else "SIMPLE"
         content_preview = self.get_content()[:30] + '...' if len(self.get_content()) > 30 else self.get_content()
-        return f"ItemFieldWidget({self.get_type()}): {content_preview}"
+        return f"ItemFieldWidget[{mode_text}]({self.get_data_type()}): {content_preview}"

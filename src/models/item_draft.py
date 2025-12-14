@@ -20,20 +20,38 @@ class ItemFieldData:
     Attributes:
         content: Contenido del item (texto, URL, código, path)
         item_type: Tipo de item (TEXT, CODE, URL, PATH)
+        label: Label/título del item (si vacío, se usa content)
+        is_sensitive: Si el item contiene datos sensibles (será cifrado)
+        is_special_mode: Si fue creado como item especial (con label separado)
     """
     content: str
     item_type: str = 'TEXT'  # Tipo por defecto
+    label: str = ''  # Si vacío, label = content
+    is_sensitive: bool = False
+    is_special_mode: bool = False
+
+    def get_final_label(self) -> str:
+        """
+        Obtiene el label final a usar (si está vacío, retorna content)
+
+        Returns:
+            Label final del item
+        """
+        return self.label.strip() if self.label.strip() else self.content.strip()
 
     def to_dict(self) -> dict:
         """
         Convierte el campo a diccionario para serialización
 
         Returns:
-            Dict con content y type
+            Dict con todos los campos
         """
         return {
             'content': self.content,
-            'type': self.item_type
+            'type': self.item_type,
+            'label': self.label,
+            'is_sensitive': self.is_sensitive,
+            'is_special_mode': self.is_special_mode
         }
 
     @classmethod
@@ -42,14 +60,17 @@ class ItemFieldData:
         Crea una instancia desde un diccionario
 
         Args:
-            data: Dict con keys 'content' y 'type'
+            data: Dict con los campos del item
 
         Returns:
             ItemFieldData instance
         """
         return cls(
             content=data.get('content', ''),
-            item_type=data.get('type', 'TEXT')
+            item_type=data.get('type', 'TEXT'),
+            label=data.get('label', ''),
+            is_sensitive=data.get('is_sensitive', False),
+            is_special_mode=data.get('is_special_mode', False)
         )
 
     def is_empty(self) -> bool:
@@ -63,8 +84,10 @@ class ItemFieldData:
 
     def __str__(self) -> str:
         """Representación en string"""
-        content_preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
-        return f"ItemField({self.item_type}): {content_preview}"
+        label_text = self.get_final_label()
+        preview = label_text[:50] + '...' if len(label_text) > 50 else label_text
+        sensitive_mark = " [SENSITIVE]" if self.is_sensitive else ""
+        return f"ItemField({self.item_type}): {preview}{sensitive_mark}"
 
 
 @dataclass
