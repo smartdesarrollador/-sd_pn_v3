@@ -94,6 +94,7 @@ class MinimizedItemButton(QPushButton):
             'GlobalSearchPanel': '🔍',
             'RelatedItemsFloatingPanel': '📄',
             'ProcessesFloatingPanel': '⚙️',
+            'ProcessBuilderWindow': '⚙️',
             'AdvancedSearchWindow': '🔍',
             'ProjectsWindow': '📁',
             'AreasWindow': '🗂️',

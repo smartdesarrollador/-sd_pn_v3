@@ -23,11 +23,12 @@ from models.category import Category
 from views.widgets.process_step_widget import ProcessStepWidget
 from views.widgets.item_widget import ItemButton
 from views.widgets.search_bar import SearchBar
+from core.taskbar_minimizable_mixin import TaskbarMinimizableMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ProcessBuilderWindow(QWidget):
+class ProcessBuilderWindow(QWidget, TaskbarMinimizableMixin):
     """Ventana para crear y editar procesos"""
 
     # Signals
@@ -48,6 +49,12 @@ class ProcessBuilderWindow(QWidget):
             parent: Parent widget
         """
         super().__init__(parent)
+
+        # Taskbar minimization setup
+        self.entity_name = "Crear Proceso"
+        self.entity_icon = "⚙️"
+        self.setup_taskbar_minimization()
+
         self.config_manager = config_manager
         self.process_controller = process_controller
         self.process_id = process_id
@@ -205,6 +212,9 @@ class ProcessBuilderWindow(QWidget):
         layout.addWidget(title)
 
         layout.addStretch()
+
+        # Minimize button
+        self.add_minimize_button(layout)
 
         # Close button
         close_btn = QPushButton("✕ Cerrar")
@@ -1563,6 +1573,16 @@ class ProcessBuilderWindow(QWidget):
 
     # ==================== CLOSE ====================
 
+    def changeEvent(self, event):
+        """Interceptar minimización para usar barra lateral"""
+        if event.type() == event.Type.WindowStateChange:
+            if self.isMinimized():
+                # Minimizar a barra lateral en lugar de taskbar de Windows
+                event.ignore()
+                self.minimize_to_taskbar()
+                return
+        super().changeEvent(event)
+
     def closeEvent(self, event):
         """Handle window close"""
         # Check if there are unsaved changes
@@ -1580,6 +1600,9 @@ class ProcessBuilderWindow(QWidget):
 
         self.window_closed.emit()
         event.accept()
+
+        # Call mixin's closeEvent to handle sidebar cleanup
+        super().closeEvent(event)
 
     # ==================== TAGS FILTER METHODS ====================
 
