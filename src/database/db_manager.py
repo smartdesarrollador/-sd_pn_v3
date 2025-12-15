@@ -872,6 +872,143 @@ class DBManager:
             logger.error(f"Error getting tag orders: {e}")
             return {}
 
+    # ========== PROJECT FILTERED ORDER ==========
+
+    def ensure_project_filtered_order_table(self):
+        """Ensures the project_filtered_order table exists"""
+        query = """
+            CREATE TABLE IF NOT EXISTS project_filtered_order (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                filter_tag_id INTEGER NOT NULL,
+                element_type TEXT NOT NULL CHECK(element_type IN ('relation', 'component')),
+                element_id INTEGER NOT NULL,
+                order_index INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES proyectos(id) ON DELETE CASCADE,
+                FOREIGN KEY (filter_tag_id) REFERENCES project_element_tags(id) ON DELETE CASCADE,
+                UNIQUE(project_id, filter_tag_id, element_type, element_id)
+            );
+        """
+        self.execute_update(query)
+
+        # Create indices
+        indices = [
+            "CREATE INDEX IF NOT EXISTS idx_project_filtered_order_project_tag ON project_filtered_order(project_id, filter_tag_id)",
+            "CREATE INDEX IF NOT EXISTS idx_project_filtered_order_element ON project_filtered_order(element_type, element_id)",
+            "CREATE INDEX IF NOT EXISTS idx_project_filtered_order_order ON project_filtered_order(project_id, filter_tag_id, order_index)"
+        ]
+        for index_query in indices:
+            self.execute_update(index_query)
+
+    def get_filtered_order(self, project_id: int, filter_tag_id: int) -> Dict[tuple, int]:
+        """
+        Gets the custom order of elements when filtered by a specific tag
+
+        Args:
+            project_id: Project ID
+            filter_tag_id: Tag ID used for filtering
+
+        Returns:
+            Dict mapping (element_type, element_id) -> order_index
+        """
+        query = """
+            SELECT element_type, element_id, order_index
+            FROM project_filtered_order
+            WHERE project_id = ? AND filter_tag_id = ?
+        """
+        try:
+            results = self.execute_query(query, (project_id, filter_tag_id))
+            return {(row['element_type'], row['element_id']): row['order_index'] for row in results}
+        except Exception as e:
+            logger.error(f"Error getting filtered order: {e}")
+            return {}
+
+    def update_filtered_order(self, project_id: int, filter_tag_id: int,
+                            element_type: str, element_id: int, order_index: int) -> bool:
+        """
+        Updates or inserts the order of an element when filtered by a tag
+
+        Args:
+            project_id: Project ID
+            filter_tag_id: Tag ID used for filtering
+            element_type: Type of element ('relation' or 'component')
+            element_id: Element ID
+            order_index: New order index
+
+        Returns:
+            True if successful
+        """
+        query = """
+            INSERT INTO project_filtered_order
+            (project_id, filter_tag_id, element_type, element_id, order_index)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(project_id, filter_tag_id, element_type, element_id) DO UPDATE SET
+                order_index = excluded.order_index,
+                updated_at = CURRENT_TIMESTAMP
+        """
+        try:
+            self.execute_update(query, (project_id, filter_tag_id, element_type, element_id, order_index))
+            return True
+        except Exception as e:
+            logger.error(f"Error updating filtered order: {e}")
+            return False
+
+    def clear_filtered_order(self, project_id: int, filter_tag_id: int = None) -> bool:
+        """
+        Clears the filtered order for a project
+
+        Args:
+            project_id: Project ID
+            filter_tag_id: Specific tag ID to clear, or None to clear all
+
+        Returns:
+            True if successful
+        """
+        try:
+            if filter_tag_id is not None:
+                query = "DELETE FROM project_filtered_order WHERE project_id = ? AND filter_tag_id = ?"
+                self.execute_update(query, (project_id, filter_tag_id))
+            else:
+                query = "DELETE FROM project_filtered_order WHERE project_id = ?"
+                self.execute_update(query, (project_id,))
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing filtered order: {e}")
+            return False
+
+    def sync_filtered_order_with_content(self, project_id: int, filter_tag_id: int,
+                                        filtered_content: List[Dict]) -> bool:
+        """
+        Synchronizes filtered order with current filtered content
+        Creates entries for elements that don't have a custom order yet
+
+        Args:
+            project_id: Project ID
+            filter_tag_id: Tag ID used for filtering
+            filtered_content: List of filtered elements (relations and components)
+
+        Returns:
+            True if successful
+        """
+        try:
+            existing_orders = self.get_filtered_order(project_id, filter_tag_id)
+
+            for index, item in enumerate(filtered_content):
+                element_type = 'relation' if item.get('entity_type') else 'component'
+                element_id = item['id']
+                key = (element_type, element_id)
+
+                # Only create entry if it doesn't exist
+                if key not in existing_orders:
+                    self.update_filtered_order(project_id, filter_tag_id, element_type, element_id, index)
+
+            return True
+        except Exception as e:
+            logger.error(f"Error syncing filtered order: {e}")
+            return False
+
     # ========== AREA TAG ORDERING ==========
 
     def ensure_area_tag_orders_table(self):
@@ -6311,6 +6448,52 @@ class DBManager:
         except Exception as e:
             logger.error(f"Error reordenando elementos: {e}")
             return False
+
+    def get_project_content_with_filtered_order(self, project_id: int, filter_tag_id: int,
+                                               filtered_content: List[Dict]) -> List[Dict]:
+        """
+        Aplica el orden filtrado a una lista de contenido filtrado
+
+        Args:
+            project_id: ID del proyecto
+            filter_tag_id: Tag ID usado para filtrar
+            filtered_content: Lista de elementos ya filtrados
+
+        Returns:
+            Lista de elementos ordenados según orden filtrado
+        """
+        try:
+            # Obtener orden filtrado
+            filtered_orders = self.get_filtered_order(project_id, filter_tag_id)
+
+            if not filtered_orders:
+                # Si no hay orden personalizado, devolver contenido en orden original
+                return filtered_content
+
+            # Crear lista ordenada
+            ordered_content = []
+            unordered_content = []
+
+            for item in filtered_content:
+                element_type = 'relation' if item.get('entity_type') else 'component'
+                element_id = item['id']
+                key = (element_type, element_id)
+
+                if key in filtered_orders:
+                    ordered_content.append((filtered_orders[key], item))
+                else:
+                    # Elementos sin orden personalizado van al final
+                    unordered_content.append(item)
+
+            # Ordenar por order_index
+            ordered_content.sort(key=lambda x: x[0])
+            result = [item for _, item in ordered_content] + unordered_content
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error aplicando orden filtrado: {e}")
+            return filtered_content
 
     def get_project_summary(self, project_id: int) -> Dict[str, int]:
         """

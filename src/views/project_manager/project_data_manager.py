@@ -255,6 +255,9 @@ Python fue creado por Guido van Rossum y lanzado por primera vez en 1991. El nom
                 # (basado en la tabla project_element_tag_associations)
                 tag_relations = self._get_relations_for_tag(tag_id, all_relations)
 
+                # Aplicar orden filtrado si existe para este tag
+                tag_relations = self._apply_filtered_order(project_id, tag_id, tag_relations)
+
                 # Agrupar relaciones por tipo de entidad
                 groups_data = []
 
@@ -406,6 +409,58 @@ Python fue creado por Guido van Rossum y lanzado por primera vez en 1991. El nom
 
         # Filtrar relaciones
         return [rel for rel in all_relations if rel['id'] in relation_ids]
+
+    def _apply_filtered_order(self, project_id: int, filter_tag_id: int,
+                              tag_relations: List[Dict]) -> List[Dict]:
+        """
+        Aplica el orden filtrado a las relaciones de un tag si existe
+
+        Args:
+            project_id: ID del proyecto
+            filter_tag_id: ID del tag de proyecto
+            tag_relations: Lista de relaciones del tag
+
+        Returns:
+            Lista de relaciones ordenadas según orden filtrado o global
+        """
+        try:
+            # Obtener orden filtrado para este tag
+            filtered_orders = self.db.get_filtered_order(project_id, filter_tag_id)
+
+            if not filtered_orders:
+                # No hay orden personalizado, usar orden global
+                return sorted(tag_relations, key=lambda x: x.get('order_index', 0))
+
+            # Separar relaciones con orden personalizado de las que no
+            ordered_relations = []
+            unordered_relations = []
+
+            for rel in tag_relations:
+                element_type = 'relation'  # Las relaciones siempre son tipo 'relation'
+                element_id = rel['id']
+                key = (element_type, element_id)
+
+                if key in filtered_orders:
+                    ordered_relations.append((filtered_orders[key], rel))
+                else:
+                    unordered_relations.append(rel)
+
+            # Ordenar relaciones por order_index filtrado
+            ordered_relations.sort(key=lambda x: x[0])
+            result = [rel for _, rel in ordered_relations]
+
+            # Agregar relaciones sin orden al final (usando su orden global)
+            unordered_relations.sort(key=lambda x: x.get('order_index', 0))
+            result.extend(unordered_relations)
+
+            return result
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error aplicando orden filtrado: {e}")
+            # En caso de error, usar orden global
+            return sorted(tag_relations, key=lambda x: x.get('order_index', 0))
 
     def _get_category_name(self, category_id: int) -> str:
         """
