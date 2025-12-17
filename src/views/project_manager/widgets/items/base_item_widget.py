@@ -94,6 +94,21 @@ class BaseItemWidget(QFrame):
         Copia el campo 'content' del item_data y emite
         la señal item_copied.
         """
+        # Si el item es sensible, verificar contraseña maestra
+        if self.item_data.get('is_sensitive', False):
+            from views.dialogs.master_password_dialog import MasterPasswordDialog
+
+            item_label = self.item_data.get('label', 'item sensible')
+            verified = MasterPasswordDialog.verify(
+                title="Item Sensible",
+                message=f"Ingresa tu contraseña maestra para copiar:\n'{item_label}'",
+                parent=self.window()
+            )
+
+            if not verified:
+                print(f"Master password verification cancelled for copying item: {item_label}")
+                return  # Usuario canceló o contraseña incorrecta
+
         content = self.item_data.get('content', '')
         if content:
             try:

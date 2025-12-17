@@ -708,6 +708,20 @@ class CategoryEditor(QWidget):
         list_item = selected_items[0]
         item = list_item.data(Qt.ItemDataRole.UserRole)
 
+        # Si el item es sensible, verificar contraseña maestra
+        if hasattr(item, 'is_sensitive') and item.is_sensitive:
+            from views.dialogs.master_password_dialog import MasterPasswordDialog
+
+            verified = MasterPasswordDialog.verify(
+                title="Item Sensible",
+                message=f"Ingresa tu contraseña maestra para editar:\n'{item.label}'",
+                parent=self
+            )
+
+            if not verified:
+                logger.info(f"Master password verification cancelled for editing item: {item.label}")
+                return  # Usuario canceló o contraseña incorrecta
+
         # Convert category_id to integer (needed for database FOREIGN KEY)
         try:
             category_id_int = int(self.current_category.id) if str(self.current_category.id).isdigit() else None
