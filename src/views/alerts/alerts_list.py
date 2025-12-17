@@ -200,7 +200,7 @@ class AlertsList(QWidget):
                 query = """
                     SELECT a.*, i.label as item_label
                     FROM item_alerts a
-                    JOIN items i ON a.item_id = i.id
+                    LEFT JOIN items i ON a.item_id = i.id
                     WHERE a.status = 'active' AND a.is_enabled = 1
                     ORDER BY a.alert_datetime ASC
                 """
@@ -209,7 +209,7 @@ class AlertsList(QWidget):
                 query = """
                     SELECT a.*, i.label as item_label
                     FROM item_alerts a
-                    JOIN items i ON a.item_id = i.id
+                    LEFT JOIN items i ON a.item_id = i.id
                     WHERE a.status IN ('triggered', 'dismissed')
                     ORDER BY a.alert_datetime DESC
                 """
@@ -218,7 +218,7 @@ class AlertsList(QWidget):
                 query = """
                     SELECT a.*, i.label as item_label
                     FROM item_alerts a
-                    JOIN items i ON a.item_id = i.id
+                    LEFT JOIN items i ON a.item_id = i.id
                     ORDER BY a.alert_datetime DESC
                 """
 

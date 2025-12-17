@@ -245,6 +245,11 @@ class AlertEditorDialog(QDialog):
             items = cursor.fetchall()
 
             self.item_combo.clear()
+
+            # Add "None" option at the beginning
+            self.item_combo.addItem("(Ninguno - Sin item asociado)", None)
+
+            # Add all items
             for item_id, label in items:
                 self.item_combo.addItem(label, item_id)
 
@@ -253,6 +258,9 @@ class AlertEditorDialog(QDialog):
                 index = self.item_combo.findData(self.default_item_id)
                 if index >= 0:
                     self.item_combo.setCurrentIndex(index)
+            else:
+                # Select "None" by default if no default item
+                self.item_combo.setCurrentIndex(0)
 
             logger.debug(f"Loaded {len(items)} items into combo box")
 
@@ -332,15 +340,7 @@ class AlertEditorDialog(QDialog):
             self.message_edit.setFocus()
             return False
 
-        # Check item selected
-        if self.item_combo.currentIndex() < 0:
-            QMessageBox.warning(
-                self,
-                "Validación",
-                "Debes seleccionar un item asociado."
-            )
-            self.item_combo.setFocus()
-            return False
+        # Item is now optional - no validation needed
 
         # Check datetime is valid
         if not self.datetime_edit.dateTime().isValid():

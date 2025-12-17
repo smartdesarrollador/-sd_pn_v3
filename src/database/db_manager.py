@@ -9460,7 +9460,7 @@ class DBManager:
             cursor.execute("""
                 SELECT e.*, i.label as item_label, i.content as item_content
                 FROM calendar_events e
-                JOIN items i ON e.item_id = i.id
+                LEFT JOIN items i ON e.item_id = i.id
                 WHERE e.event_datetime >= ? AND e.event_datetime < ?
                   AND e.is_active = 1
                 ORDER BY e.event_datetime ASC
@@ -9490,7 +9490,7 @@ class DBManager:
             cursor.execute("""
                 SELECT e.*, i.label as item_label
                 FROM calendar_events e
-                JOIN items i ON e.item_id = i.id
+                LEFT JOIN items i ON e.item_id = i.id
                 WHERE e.event_datetime >= datetime('now')
                   AND e.event_datetime <= datetime('now', '+' || ? || ' days')
                   AND e.is_active = 1
@@ -9795,7 +9795,7 @@ class DBManager:
             cursor.execute("""
                 SELECT a.*, i.label as item_label, i.content as item_content
                 FROM item_alerts a
-                JOIN items i ON a.item_id = i.id
+                LEFT JOIN items i ON a.item_id = i.id
                 WHERE a.alert_datetime <= datetime('now', '+1 minute')
                   AND a.status = 'active'
                   AND a.is_enabled = 1
