@@ -1571,6 +1571,20 @@ Busca la frase exacta.<br>
 
     def edit_item(self, result):
         """Edita un item"""
+        # Si el item es sensible, verificar contraseña maestra
+        if hasattr(result, 'is_sensitive') and result.is_sensitive:
+            from views.dialogs.master_password_dialog import MasterPasswordDialog
+
+            verified = MasterPasswordDialog.verify(
+                title="Item Sensible",
+                message=f"Ingresa tu contraseña maestra para editar:\n'{result.name}'",
+                parent=self
+            )
+
+            if not verified:
+                logger.info(f"Master password verification cancelled for editing item: {result.name}")
+                return  # Usuario canceló o contraseña incorrecta
+
         logger.info(f"Editando item: {result.name}")
         self.edit_item_requested.emit(result.id)
 
@@ -1645,6 +1659,25 @@ Busca la frase exacta.<br>
                 QMessageBox.information(self, "Exportar CSV", "No hay resultados para exportar")
                 return
 
+            # Verificar si hay items sensibles en los resultados
+            has_sensitive_items = any(
+                hasattr(result, 'is_sensitive') and result.is_sensitive
+                for result in self.current_results
+            )
+
+            if has_sensitive_items:
+                from views.dialogs.master_password_dialog import MasterPasswordDialog
+
+                verified = MasterPasswordDialog.verify(
+                    title="Exportar Items Sensibles",
+                    message="Los resultados contienen items sensibles.\nIngresa tu contraseña maestra para continuar con la exportación.",
+                    parent=self
+                )
+
+                if not verified:
+                    logger.info("Master password verification cancelled for CSV export with sensitive items")
+                    return  # Usuario canceló o contraseña incorrecta
+
             # Diálogo para seleccionar ubicación
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             default_name = f"busqueda_universal_{timestamp}.csv"
@@ -1707,6 +1740,25 @@ Busca la frase exacta.<br>
             if not self.current_results:
                 QMessageBox.information(self, "Exportar JSON", "No hay resultados para exportar")
                 return
+
+            # Verificar si hay items sensibles en los resultados
+            has_sensitive_items = any(
+                hasattr(result, 'is_sensitive') and result.is_sensitive
+                for result in self.current_results
+            )
+
+            if has_sensitive_items:
+                from views.dialogs.master_password_dialog import MasterPasswordDialog
+
+                verified = MasterPasswordDialog.verify(
+                    title="Exportar Items Sensibles",
+                    message="Los resultados contienen items sensibles.\nIngresa tu contraseña maestra para continuar con la exportación.",
+                    parent=self
+                )
+
+                if not verified:
+                    logger.info("Master password verification cancelled for JSON export with sensitive items")
+                    return  # Usuario canceló o contraseña incorrecta
 
             # Diálogo para seleccionar ubicación
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
