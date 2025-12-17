@@ -805,8 +805,10 @@ class StructureDashboard(QDialog, TaskbarMinimizableMixin):
                 item_widget.setData(0, Qt.ItemDataRole.UserRole, {
                     'type': 'item',
                     'id': item['id'],
+                    'name': item.get('label', ''),  # Add item name
                     'content': item['content'],
                     'item_type': item['type'],
+                    'is_sensitive': item.get('is_sensitive', False),  # Add sensitive flag
                     'tags': tags_str  # Add tags as comma-separated string
                 })
 
@@ -2459,6 +2461,24 @@ class StructureDashboard(QDialog, TaskbarMinimizableMixin):
 
     def copy_item_content(self, data: dict):
         """Copy item content to clipboard"""
+        # Si el item es sensible, verificar contraseña maestra
+        if data.get('is_sensitive', False):
+            from views.dialogs.master_password_dialog import MasterPasswordDialog
+
+            item_name = data.get('name', 'item sensible')
+            verified = MasterPasswordDialog.verify(
+                title="Item Sensible",
+                message=f"Ingresa tu contraseña maestra para copiar:\n'{item_name}'",
+                parent=self
+            )
+
+            if not verified:
+                logger.info(f"Master password verification cancelled for copying item: {item_name}")
+                self.stats_label.setText("❌ Copia cancelada - verificación requerida")
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(2000, lambda: self.update_statistics())
+                return  # Usuario canceló o contraseña incorrecta
+
         content = data.get('content', '')
         if content:
             clipboard = QApplication.clipboard()
@@ -2473,6 +2493,24 @@ class StructureDashboard(QDialog, TaskbarMinimizableMixin):
     def show_item_details(self, item: QTreeWidgetItem, data: dict):
         """Show detailed information about an item"""
         from PyQt6.QtWidgets import QMessageBox
+
+        # Si el item es sensible, verificar contraseña maestra
+        if data.get('is_sensitive', False):
+            from views.dialogs.master_password_dialog import MasterPasswordDialog
+
+            item_name = data.get('name', item.text(0))
+            verified = MasterPasswordDialog.verify(
+                title="Item Sensible",
+                message=f"Ingresa tu contraseña maestra para ver detalles de:\n'{item_name}'",
+                parent=self
+            )
+
+            if not verified:
+                logger.info(f"Master password verification cancelled for viewing details of item: {item_name}")
+                self.stats_label.setText("❌ Acceso denegado - verificación requerida")
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(2000, lambda: self.update_statistics())
+                return  # Usuario canceló o contraseña incorrecta
 
         details = []
         details.append(f"<b>Tipo:</b> {data.get('item_type', 'N/A')}")
